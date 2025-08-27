@@ -1,0 +1,50 @@
+[project]
+name = "custom_components.motion-lights-adv"
+version = "3.0.0"
+description = "A sophisticated Home Assistant custom integration providing intelligent motion-activated lighting with comprehensive manual override detection and automatic energy-saving features."
+maintainers = [
+  {name = "Marius Bieliauskas", email = "mbieliau@gmail.com"}
+]
+keywords = [
+  "homeassistant",
+  "lights",
+  "custom-component",
+  "custom-integration"
+]
+classifiers = [
+  "Intended Audience :: End Users/Desktop",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11"
+]
+requires-python = ">=3.12.0"
+dependencies = [
+  "homeassistant>=2024.12.0",
+  "pytest>=8.3.4",
+  "pyyaml>=6.0.2",
+  "ruff>=0.9.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "homeassistant-stubs",
+  "pytest",
+  "ruff",
+  "types-PyYAML",
+  "voluptuous-stubs",
+  "pyyaml"
+]
+
+[project.urls]
+"Source Code" = "https://github.com/recallfx/ha-motion-lights-adv"
+"Bug Reports" = "https://github.com/recallfx/ha-motion-lights-adv/issues"
+
+[tool.setuptools]
+py-modules = ["custom_components.motion-lights-adv"]
+
+[tool.ruff]
+src = ["src", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]

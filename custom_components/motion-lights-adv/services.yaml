@@ -1,0 +1,10 @@
+refresh_tracking:
+  name: Refresh Light Tracking
+  description: Refresh the light tracking for this motion lights integration when entities become available
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The config entry ID of the motion lights integration to refresh
+      required: true
+      selector:
+        text:
