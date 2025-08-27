@@ -151,7 +151,7 @@ The integration provides a comprehensive sensor entity exposing essential status
 Run all tests with coverage:
 ```bash
 # From Home Assistant core directory
-pytest tests/components/motion-lights-adv/ --cov=homeassistant.components.motion-lights-adv --cov-report=term-missing -v
+pytest ./ --cov=homeassistant.components.motion-lights-adv --cov-report=term-missing -v
 ```
 
 ## Troubleshooting
@@ -225,7 +225,7 @@ Contributions are welcome! Please ensure:
 ### Development Setup
 ```bash
 # Clone the repository
-git clone https://github.com/recallfx/motion-lights-adv.git
+git clone https://github.com/recallfx/ha-motion-lights-adv.git
 
 # Set up development environment
 cd motion-lights-adv
@@ -274,4 +274,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-*For support, please check the [issues page](https://github.com/recallfx/motion-lights-adv/issues) or Home Assistant Community forums.*
+*For support, please check the [issues page](https://github.com/recallfx/ha-motion-lights-adv/issues) or Home Assistant Community forums.*
