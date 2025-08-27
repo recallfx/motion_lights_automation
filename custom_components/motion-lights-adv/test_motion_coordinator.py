@@ -10,10 +10,13 @@ import pytest
 from homeassistant.core import Context, HomeAssistant
 
 from .const import (
+    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_DAY,
     CONF_BRIGHTNESS_NIGHT,
-    CONF_COMBINED_LIGHT,
+    CONF_CEILING_LIGHT,
+    CONF_DARK_OUTSIDE,
     CONF_EXTENDED_TIMEOUT,
+    CONF_FEATURE_LIGHT,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -36,7 +39,11 @@ from .motion_coordinator import (
 @pytest.fixture
 def mock_hass() -> HomeAssistant:
     """Minimal HomeAssistant mock for coordinator unit tests."""
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     hass = MagicMock(spec=HomeAssistant)
     # States
     hass.states = MagicMock()
@@ -58,7 +65,10 @@ def coordinator(mock_hass: HomeAssistant) -> MotionLightsCoordinator:
     data = {
         CONF_MOTION_ENTITY: "binary_sensor.motion",
         CONF_OVERRIDE_SWITCH: "input_boolean.override",
-        CONF_COMBINED_LIGHT: "light.combined",
+        CONF_BACKGROUND_LIGHT: "light.background",
+        CONF_FEATURE_LIGHT: "light.feature",
+        CONF_CEILING_LIGHT: "light.ceiling",
+        CONF_DARK_OUTSIDE: "binary_sensor.dark_outside",
         CONF_MOTION_ACTIVATION: True,
         CONF_NO_MOTION_WAIT: 120,
         CONF_EXTENDED_TIMEOUT: 600,
@@ -165,7 +175,7 @@ class TestManualDetection:
         new_state.context = Context()
 
         coordinator._handle_external_light_change(
-            "light.combined", old_state, new_state, 50
+            "light.background", old_state, new_state, 50
         )
 
         assert coordinator._current_state == STATE_MOTION_MANUAL
@@ -239,36 +249,55 @@ class TestLightSelection:
     @patch("homeassistant.util.dt.now")
     def test_night_uses_night_brightness(self, mock_now, coordinator):
         mock_now.return_value = datetime(2025, 8, 14, 2, 0, 0)
+        # Mock dark outside entity as "on" (night mode)
+        coordinator.hass.states.get.return_value.state = "on"
         lights, brightness = coordinator._determine_lights_and_brightness()
-        assert lights == ["light.combined"]
+        assert lights == [coordinator.background_light]
         assert brightness == coordinator.brightness_night
 
     @patch("homeassistant.util.dt.now")
     def test_day_uses_day_brightness(self, mock_now, coordinator):
         mock_now.return_value = datetime(2025, 8, 14, 12, 0, 0)
+        # Mock dark outside entity as "off" (day mode)
+        coordinator.hass.states.get.return_value.state = "off"
         lights, brightness = coordinator._determine_lights_and_brightness()
-        assert lights == ["light.combined"]
+        expected_lights = [
+            coordinator.background_light,
+            coordinator.feature_light,
+            coordinator.ceiling_light,
+        ]
+        assert lights == expected_lights
         assert brightness == coordinator.brightness_day
 
 
 class TestTimerBehavior:
+    """Test timer behavior with motion events."""
+
     def test_new_motion_during_auto_cancels_timer(self, coordinator, mock_hass):
+        """Test that new motion during auto mode cancels existing timer."""
         coordinator._current_state = STATE_AUTO
         coordinator._active_timer = MagicMock()
         coordinator._timer_type = TIMER_MOTION
         mock_hass.states.get.side_effect = lambda eid: MagicMock(state="on")
 
-        coordinator._handle_motion_on()
+        # Simulate motion on event
+        event = MagicMock()
+        event.data = {"new_state": MagicMock(state="on")}
+        coordinator._async_motion_state_changed(event)
 
-        assert coordinator._current_state == STATE_MOTION_AUTO
+        assert coordinator.current_state == STATE_MOTION_AUTO
         assert coordinator._active_timer is None
 
     def test_new_motion_during_manual_cancels_extended_timer(self, coordinator):
+        """Test that new motion during manual mode cancels extended timer."""
         coordinator._current_state = STATE_MANUAL
         coordinator._active_timer = MagicMock()
         coordinator._timer_type = TIMER_EXTENDED
 
-        coordinator._handle_motion_on()
+        # Simulate motion on event
+        event = MagicMock()
+        event.data = {"new_state": MagicMock(state="on")}
+        coordinator._async_motion_state_changed(event)
 
-        assert coordinator._current_state == STATE_MOTION_MANUAL
+        assert coordinator.current_state == STATE_MOTION_MANUAL
         assert coordinator._active_timer is None

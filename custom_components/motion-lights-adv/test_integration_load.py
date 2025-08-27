@@ -9,16 +9,19 @@ sys.path.insert(0, "/workspaces/ha_core/config/custom_components")
 
 try:
     # Test imports
-    from motion_lights_adv.const import DOMAIN, CONF_COMBINED_LIGHT
+    from motion_lights_adv.const import DOMAIN
     from motion_lights_adv.motion_coordinator import MotionLightsCoordinator
-    from motion_lights_adv.config_flow import MotionLightsAdvConfigFlow
+    from motion_lights_adv.config_flow import ConfigFlow
 
     print("✅ All imports successful")
 
     # Test configuration constants
     test_config = {
         "motion_entity": "binary_sensor.test_motion",
-        "combined_light": "light.test_combined",
+        "background_light": "light.test_background",
+        "feature_light": "light.test_feature",
+        "ceiling_light": "light.test_ceiling",
+        "dark_outside": "binary_sensor.test_dark_outside",
         "override_switch": "input_boolean.test_override",
         "motion_activation": True,
         "no_motion_wait": 120,
@@ -60,12 +63,16 @@ try:
     coordinator = MotionLightsCoordinator(hass, mock_entry)
 
     print("✅ Coordinator creation successful")
-    print(f"✅ Combined light: {coordinator.combined_light}")
+    print(f"✅ Background light: {coordinator.background_light}")
+    print(f"✅ Feature light: {coordinator.feature_light}")
+    print(f"✅ Ceiling light: {coordinator.ceiling_light}")
     print(f"✅ Motion activation: {coordinator.motion_activation}")
     print(f"✅ Day brightness: {coordinator.brightness_day}")
 
     # Test sensor property access
-    print(f"✅ Combined light entity: {coordinator.combined_light_entity}")
+    print(f"✅ Background light entity: {coordinator.background_light_entity}")
+    print(f"✅ Feature light entity: {coordinator.feature_light_entity}")
+    print(f"✅ Ceiling light entity: {coordinator.ceiling_light_entity}")
     print(f"✅ No motion wait: {coordinator.no_motion_wait_seconds}")
     print(f"✅ Motion activation enabled: {coordinator.is_motion_activation_enabled}")
 

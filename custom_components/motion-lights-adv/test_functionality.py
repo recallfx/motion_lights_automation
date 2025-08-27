@@ -2,14 +2,18 @@
 """Simple test script to verify motion coordinator functionality (updated)."""
 
 import asyncio
+import sys
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from .const import (
+    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_DAY,
     CONF_BRIGHTNESS_NIGHT,
-    CONF_COMBINED_LIGHT,
+    CONF_CEILING_LIGHT,
+    CONF_DARK_OUTSIDE,
     CONF_EXTENDED_TIMEOUT,
+    CONF_FEATURE_LIGHT,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -32,8 +36,13 @@ def create_mock_coordinator():
     """Create a coordinator with mocked dependencies."""
     # Mock HomeAssistant
     hass = MagicMock()
-    hass.loop = asyncio.get_event_loop()
-    hass.async_create_task = lambda coro: asyncio.create_task(coro)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    hass.loop = loop
+    hass.async_create_task = lambda coro: loop.create_task(coro)
     hass.services = AsyncMock()
     hass.states = MagicMock()
 
@@ -42,7 +51,10 @@ def create_mock_coordinator():
     config_entry.data = {
         CONF_MOTION_ENTITY: "binary_sensor.motion",
         CONF_OVERRIDE_SWITCH: "input_boolean.override",
-        CONF_COMBINED_LIGHT: "light.combined",
+        CONF_BACKGROUND_LIGHT: "light.background",
+        CONF_FEATURE_LIGHT: "light.feature", 
+        CONF_CEILING_LIGHT: "light.ceiling",
+        CONF_DARK_OUTSIDE: "binary_sensor.dark_outside",
         CONF_MOTION_ACTIVATION: True,
         CONF_NO_MOTION_WAIT: 5,  # Short for testing
         CONF_EXTENDED_TIMEOUT: 10,  # Short for testing
