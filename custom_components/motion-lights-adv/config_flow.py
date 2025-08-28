@@ -37,31 +37,60 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
-    """Get the basic user schema with optional default values."""
+    """Get the basic user schema with optional default values.
+
+    All fields are optional. Motion and light selectors support multiple entities.
+    Defaults for multi-select fields are empty lists to avoid type errors when omitted.
+    """
+
+    def _as_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple, set)):
+            return [str(v) for v in value]
+        return []
+
+    motion_default = _as_list(data.get(CONF_MOTION_ENTITY)) if data else []
+    bg_default = _as_list(data.get(CONF_BACKGROUND_LIGHT)) if data else []
+    feat_default = _as_list(data.get(CONF_FEATURE_LIGHT)) if data else []
+    ceil_default = _as_list(data.get(CONF_CEILING_LIGHT)) if data else []
+
     return vol.Schema(
         {
-            vol.Required(CONF_NAME, default=data.get(CONF_NAME) if data else None): str,
-            vol.Required(
+            vol.Optional(
+                CONF_NAME, default=(data.get(CONF_NAME) if data else None)
+            ): str,
+            vol.Optional(
                 CONF_MOTION_ENTITY,
-                default=data.get(CONF_MOTION_ENTITY) if data else None,
+                default=motion_default,
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(
-                    domain="binary_sensor", device_class="motion"
+                    domain="binary_sensor",
+                    device_class="motion",
+                    multiple=True,
                 )
             ),
-            vol.Required(
+            vol.Optional(
                 CONF_BACKGROUND_LIGHT,
-                default=data.get(CONF_BACKGROUND_LIGHT) if data else None,
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="light")),
-            vol.Required(
+                default=bg_default,
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="light", multiple=True)
+            ),
+            vol.Optional(
                 CONF_FEATURE_LIGHT,
-                default=data.get(CONF_FEATURE_LIGHT) if data else None,
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="light")),
-            vol.Required(
+                default=feat_default,
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="light", multiple=True)
+            ),
+            vol.Optional(
                 CONF_CEILING_LIGHT,
-                default=data.get(CONF_CEILING_LIGHT) if data else None,
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="light")),
-            vol.Required(
+                default=ceil_default,
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="light", multiple=True)
+            ),
+            vol.Optional(
                 CONF_OVERRIDE_SWITCH,
                 default=data.get(CONF_OVERRIDE_SWITCH) if data else None,
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
@@ -122,28 +151,40 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    # Validate that all lights exist
+
+    # Helper to normalize a config value into a list of entity_ids
+    def _as_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple, set)):
+            return [str(v) for v in value]
+        return []
+
+    # Validate provided lights (optional; only validate if user set them)
     for key in (CONF_BACKGROUND_LIGHT, CONF_FEATURE_LIGHT, CONF_CEILING_LIGHT):
-        light_ent = data.get(key)
-        if not light_ent or not hass.states.get(light_ent):
-            raise CannotConnect(f"Light entity {light_ent or key} not found")
+        for ent in _as_list(data.get(key)):
+            if not hass.states.get(ent):
+                raise CannotConnect(f"Light entity {ent} not found")
 
-    # Motion sensor is always required for determining when to turn off lights
-    motion_entity = data[CONF_MOTION_ENTITY]
-    if not hass.states.get(motion_entity):
-        raise CannotConnect(f"Motion entity {motion_entity} not found")
+    # Validate provided motion sensors (optional)
+    for ent in _as_list(data.get(CONF_MOTION_ENTITY)):
+        if not hass.states.get(ent):
+            raise CannotConnect(f"Motion entity {ent} not found")
 
-    # Validate that override switch exists
-    override_switch = data[CONF_OVERRIDE_SWITCH]
-    if not hass.states.get(override_switch):
-        raise CannotConnect(f"Override switch {override_switch} not found")
+    # Validate override switch if provided (accept single or list defensively)
+    override_val = data.get(CONF_OVERRIDE_SWITCH)
+    for ov in _as_list(override_val):
+        if not hass.states.get(ov):
+            raise CannotConnect(f"Override switch {ov} not found")
 
     # If dark outside entity provided, validate it exists (optional)
     dark_outside = data.get(CONF_DARK_OUTSIDE)
     if dark_outside and not hass.states.get(dark_outside):
         raise CannotConnect(f"Dark outside entity {dark_outside} not found")
 
-    return {"title": data[CONF_NAME]}
+    return {"title": data.get(CONF_NAME) or "Motion lights adv"}
 
 
 class ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -188,7 +229,19 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             config_data = {**self._basic_config, **user_input}
 
             # Create unique ID based on motion entity and name
-            unique_id = f"{config_data[CONF_MOTION_ENTITY]}_{config_data[CONF_NAME]}"
+            def _normalize_list(val: Any) -> list[str]:
+                if val is None:
+                    return []
+                if isinstance(val, str):
+                    return [val]
+                if isinstance(val, (list, tuple, set)):
+                    return [str(v) for v in val]
+                return []
+
+            motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
+            name = config_data.get(CONF_NAME) or DOMAIN
+            motion_key = "|".join(motion_list) if motion_list else "no-motion"
+            unique_id = f"{name}:{motion_key}"
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
@@ -248,9 +301,20 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # Check if the motion entity or name changed - if so, update unique ID
             old_unique_id = config_entry.unique_id
-            new_unique_id = (
-                f"{config_data[CONF_MOTION_ENTITY]}_{config_data[CONF_NAME]}"
-            )
+
+            def _normalize_list(val: Any) -> list[str]:
+                if val is None:
+                    return []
+                if isinstance(val, str):
+                    return [val]
+                if isinstance(val, (list, tuple, set)):
+                    return [str(v) for v in val]
+                return []
+
+            motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
+            name = config_data.get(CONF_NAME) or DOMAIN
+            motion_key = "|".join(motion_list) if motion_list else "no-motion"
+            new_unique_id = f"{name}:{motion_key}"
 
             if old_unique_id != new_unique_id:
                 await self.async_set_unique_id(new_unique_id)

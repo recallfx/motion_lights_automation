@@ -1,6 +1,6 @@
 [project]
 name = "custom_components.motion-lights-adv"
-version = "3.0.0"
+version = "3.1.0"
 description = "A sophisticated Home Assistant custom integration providing intelligent motion-activated lighting with comprehensive manual override detection and automatic energy-saving features."
 maintainers = [
   {name = "Marius Bieliauskas", email = "mbieliau@gmail.com"}

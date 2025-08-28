@@ -100,7 +100,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubscribers: list[callable] = []
 
     def _load_config(self) -> None:
-        """Load light entities from config entry."""
+        """Load entities from config entry and normalize to lists with fallbacks."""
         data = self.config_entry.data
 
         def _as_list(value: Any) -> list[str]:
@@ -128,9 +128,15 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT
         )
 
-        # Motion sensor and override switch
-        self.motion_entity = data[CONF_MOTION_ENTITY]
-        self.override_switch = data[CONF_OVERRIDE_SWITCH]
+        # Motion sensors and override switch (optional)
+        self.motion_entities = _as_list(data.get(CONF_MOTION_ENTITY))
+        # Normalize override switch: accept a single entity_id; if a list was provided, pick the first
+        override_cfg = data.get(CONF_OVERRIDE_SWITCH)
+        if isinstance(override_cfg, (list, tuple, set)):
+            override_list = [str(v) for v in override_cfg if v]
+            self.override_switch = override_list[0] if override_list else None
+        else:
+            self.override_switch = str(override_cfg) if override_cfg else None
 
         # Optional dark-outside switch/sensor for night detection
         self.dark_outside = data.get(CONF_DARK_OUTSIDE)
@@ -139,53 +145,58 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.brightness_day = data.get(CONF_BRIGHTNESS_DAY, 60)
         self.brightness_night = data.get(CONF_BRIGHTNESS_NIGHT, 10)
 
-        # Separate light entities
-        self.background_light = data[CONF_BACKGROUND_LIGHT]
-        self.feature_light = data[CONF_FEATURE_LIGHT]
-        self.ceiling_light = data[CONF_CEILING_LIGHT]
+        # Separate light entities (lists)
+        self.background_lights = _as_list(data.get(CONF_BACKGROUND_LIGHT))
+        self.feature_lights = _as_list(data.get(CONF_FEATURE_LIGHT))
+        self.ceiling_lights = _as_list(data.get(CONF_CEILING_LIGHT))
+
+        # Backwards-compatible single-entity fallbacks
+        self.motion_entity = self.motion_entities[0] if self.motion_entities else ""
+        self.background_light = (
+            self.background_lights[0] if self.background_lights else ""
+        )
+        self.feature_light = self.feature_lights[0] if self.feature_lights else ""
+        self.ceiling_light = self.ceiling_lights[0] if self.ceiling_lights else ""
 
         # Warn if any light does not look like a light entity
-        for light_name, light_entity in [
-            ("background_light", self.background_light),
-            ("feature_light", self.feature_light),
-            ("ceiling_light", self.ceiling_light),
+        for light_name, light_entities in [
+            ("background_light", self.background_lights),
+            ("feature_light", self.feature_lights),
+            ("ceiling_light", self.ceiling_lights),
         ]:
-            if not light_entity.startswith("light."):
-                _LOGGER.debug(
-                    f"Configured entity {light_name}=%s does not start with 'light.' - verify it is a light entity",
-                    light_entity,
-                )
+            for light_entity in light_entities:
+                if not light_entity.startswith("light."):
+                    _LOGGER.debug(
+                        "Configured entity %s=%s does not start with 'light.' - verify it is a light entity",
+                        light_name,
+                        light_entity,
+                    )
 
         _LOGGER.debug(
-            "Loaded config: motion=%s, override=%s, dark_outside=%s, motion_activation=%s, background_light=%s, feature_light=%s, ceiling_light=%s",
-            self.motion_entity,
+            "Loaded config: motion=%s, override=%s, dark_outside=%s, motion_activation=%s, background_lights=%s, feature_lights=%s, ceiling_lights=%s",
+            self.motion_entities,
             self.override_switch,
             self.dark_outside,
             self.motion_activation,
-            self.background_light,
-            self.feature_light,
-            self.ceiling_light,
+            self.background_lights,
+            self.feature_lights,
+            self.ceiling_lights,
         )
 
     async def async_setup_listeners(self) -> None:
         """Set up event listeners."""
-        missing_lights = [
-            l
-            for l in [self.background_light, self.feature_light, self.ceiling_light]
-            if not l
-        ]
-        if missing_lights:
-            _LOGGER.warning(f"Missing lights configured for tracking: {missing_lights}")
-            return
+        # Proceed even if some lists are empty; features will degrade gracefully
 
         # Check if light entities are available, retry if needed
         await self._ensure_entities_available()
 
-        # Set up motion sensor monitoring
-        self._setup_motion_monitoring()
+        # Set up motion sensor monitoring (if configured)
+        if self.motion_entities:
+            self._setup_motion_monitoring()
 
-        # Set up override switch monitoring
-        self._setup_override_monitoring()
+        # Set up override switch monitoring (if configured)
+        if self.override_switch:
+            self._setup_override_monitoring()
 
         # Set up light monitoring
         self._setup_light_monitoring()
@@ -204,24 +215,31 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         retry_delay = 2  # seconds
 
         for attempt in range(max_retries):
-            missing_entities = []
+            missing_entities = [
+                ent for ent in self.motion_entities if not self.hass.states.get(ent)
+            ]
 
-            # Check motion sensor
-            if not self.hass.states.get(self.motion_entity):
-                missing_entities.append(self.motion_entity)
-
-            # Check override switch
-            if not self.hass.states.get(self.override_switch):
-                missing_entities.append(self.override_switch)
+            # Check override switch (if configured)
+            if self.override_switch:
+                if isinstance(self.override_switch, (list, tuple, set)):
+                    missing_entities.extend(
+                        [
+                            ov
+                            for ov in self.override_switch
+                            if not self.hass.states.get(ov)
+                        ]
+                    )
+                elif not self.hass.states.get(self.override_switch):
+                    missing_entities.append(self.override_switch)
 
             # Check all lights
-            for light in [
-                self.background_light,
-                self.feature_light,
-                self.ceiling_light,
-            ]:
-                if not self.hass.states.get(light):
-                    missing_entities.append(light)
+            missing_entities.extend(
+                [
+                    lid
+                    for lid in self._all_configured_lights()
+                    if not self.hass.states.get(lid)
+                ]
+            )
 
             if not missing_entities:
                 _LOGGER.info("All entities available for motion lights integration")
@@ -269,25 +287,27 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _setup_motion_monitoring(self) -> None:
         """Set up motion sensor monitoring."""
-        motion_state = self.hass.states.get(self.motion_entity)
-        if not motion_state:
-            _LOGGER.warning("Motion sensor entity '%s' not found", self.motion_entity)
+        if not self.motion_entities:
+            _LOGGER.info("No motion sensors configured; skipping motion monitoring")
             return
+
+        missing = [e for e in self.motion_entities if not self.hass.states.get(e)]
+        if missing:
+            _LOGGER.warning("Some motion sensors not found: %s", missing)
 
         self._unsubscribers.append(
             async_track_state_change_event(
                 self.hass,
-                [self.motion_entity],
+                list(self.motion_entities),
                 self._async_motion_state_changed,
             )
         )
-        _LOGGER.info("Monitoring motion sensor: %s", self.motion_entity)
+        _LOGGER.info("Monitoring motion sensors: %s", self.motion_entities)
 
     @callback
     def _async_motion_state_changed(self, event: Event) -> None:
         """Handle motion sensor state changes per tight specification."""
         new_state = event.data.get("new_state")
-        old_state = event.data.get("old_state")
 
         if not new_state:
             return
@@ -296,8 +316,15 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Motion ON
             self._handle_motion_on()
         elif new_state.state == "off":
-            # Motion OFF
-            self._handle_motion_off()
+            # Motion OFF for one sensor; only treat as OFF if all are off
+            any_on = False
+            for ent in self.motion_entities:
+                st = self.hass.states.get(ent)
+                if st is not None and st.state == "on":
+                    any_on = True
+                    break
+            if not any_on:
+                self._handle_motion_off()
 
         # Update coordinator data
         self._update_light_data()
@@ -508,7 +535,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_turn_off_configured_lights(self) -> None:
         """Turn off all configured lights that are currently on."""
-        for light in [self.background_light, self.feature_light, self.ceiling_light]:
+        for light in self._all_configured_lights():
             current_state = self.hass.states.get(light)
             if current_state and current_state.state == "on":
                 await self._async_set_light_state(light, "off", 0)
@@ -575,7 +602,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _setup_light_monitoring(self) -> None:
         """Set up light monitoring to track state changes."""
-        lights = [self.background_light, self.feature_light, self.ceiling_light]
+        lights = self._all_configured_lights()
+        if not lights:
+            _LOGGER.warning("No lights configured; skipping light monitoring")
+            return
         self._unsubscribers.append(
             async_track_state_change_event(
                 self.hass,
@@ -746,7 +776,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _any_configured_lights_on(self) -> bool:
         """Check if any configured lights are currently on."""
-        for light in [self.background_light, self.feature_light, self.ceiling_light]:
+        for light in self._all_configured_lights():
             state = self.hass.states.get(light)
             if state is not None and state.state == "on":
                 return True
@@ -754,7 +784,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _capture_initial_light_states(self) -> None:
         """Capture initial state of all lights."""
-        for light in [self.background_light, self.feature_light, self.ceiling_light]:
+        for light in self._all_configured_lights():
             state = self.hass.states.get(light)
             if state:
                 brightness_pct = self._get_brightness_percent(state)
@@ -783,6 +813,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _is_override_active(self) -> bool:
         """Check if override switch is active."""
+        if not self.override_switch:
+            return False
+        if isinstance(self.override_switch, (list, tuple, set)):
+            for ov in self.override_switch:
+                st = self.hass.states.get(ov)
+                if st is not None and st.state == "on":
+                    return True
+            return False
         override_state = self.hass.states.get(self.override_switch)
         return override_state is not None and override_state.state == "on"
 
@@ -798,16 +836,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             is_night_mode = bool(dark_entity and dark_entity.state == "on")
 
         if is_night_mode:
-            # Night: only background light, night brightness
+            # Night: only background lights, night brightness
             lights_to_turn_on = (
-                [self.background_light] if self.brightness_night > 0 else []
+                list(self.background_lights) if self.brightness_night > 0 else []
             )
             target_brightness = self.brightness_night
         else:
-            # Day: all three lights, day brightness
+            # Day: all configured lights, day brightness
             lights_to_turn_on = [
-                l
-                for l in [self.background_light, self.feature_light, self.ceiling_light]
+                light
+                for light in self._all_configured_lights()
                 if self.brightness_day > 0
             ]
             target_brightness = self.brightness_day
@@ -876,15 +914,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if total_lights == 0:
             _LOGGER.warning(
                 "No lights are being tracked! Configured lights: %s. This may indicate entity availability issues",
-                [self.background_light, self.feature_light, self.ceiling_light],
+                self._all_configured_lights(),
             )
         self.async_update_listeners()
 
     async def async_refresh_light_tracking(self) -> None:
         """Refresh light tracking if entities became available."""
         if any(
-            l not in self._tracked_lights
-            for l in [self.background_light, self.feature_light, self.ceiling_light]
+            light not in self._tracked_lights for light in self._all_configured_lights()
         ):
             _LOGGER.info("Refreshing light tracking due to missing entity")
             self._capture_initial_light_states()
@@ -944,14 +981,17 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def background_light_entity(self) -> str:
+        """Return a representative background light entity (first configured)."""
         return self.background_light
 
     @property
     def feature_light_entity(self) -> str:
+        """Return a representative feature light entity (first configured)."""
         return self.feature_light
 
     @property
     def ceiling_light_entity(self) -> str:
+        """Return a representative ceiling light entity (first configured)."""
         return self.ceiling_light
 
     @property
@@ -962,8 +1002,21 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def current_motion_state(self) -> str:
         """Get current motion sensor state."""
-        motion_state = self.hass.states.get(self.motion_entity)
-        return motion_state.state if motion_state else "unknown"
+        if not self.motion_entities:
+            return "unknown"
+        any_on = False
+        any_known = False
+        for ent in self.motion_entities:
+            st = self.hass.states.get(ent)
+            if st is None:
+                continue
+            any_known = True
+            if st.state == "on":
+                any_on = True
+                break
+        if not any_known:
+            return "unknown"
+        return "on" if any_on else "off"
 
     @property
     def is_override_active(self) -> bool:
@@ -1014,32 +1067,61 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def diagnostic_info(self) -> dict[str, Any]:
         """Get diagnostic information for troubleshooting."""
+        configured = {
+            "background_lights": list(self.background_lights),
+            "feature_lights": list(self.feature_lights),
+            "ceiling_lights": list(self.ceiling_lights),
+        }
+        flattened = self._all_configured_lights()
         return {
-            "configured_lights": [
-                self.background_light,
-                self.feature_light,
-                self.ceiling_light,
-            ],
+            "configured_lights": configured,
             "dark_outside": self.dark_outside or None,
             "tracked_lights_count": len(self._tracked_lights),
             "tracked_light_ids": list(self._tracked_lights.keys()),
             "missing_lights": [
-                l
-                for l in [self.background_light, self.feature_light, self.ceiling_light]
-                if l not in self._tracked_lights
+                light_id
+                for light_id in flattened
+                if light_id not in self._tracked_lights
             ],
             "available_entities": {
-                "motion_sensor": self.hass.states.get(self.motion_entity) is not None,
-                "override_switch": self.hass.states.get(self.override_switch)
-                is not None,
-                "background_light": self.hass.states.get(self.background_light)
-                is not None,
-                "feature_light": self.hass.states.get(self.feature_light) is not None,
-                "ceiling_light": self.hass.states.get(self.ceiling_light) is not None,
+                "motion_sensors": {
+                    ent: self.hass.states.get(ent) is not None
+                    for ent in self.motion_entities
+                },
+                "override_switch": (
+                    {
+                        ov: self.hass.states.get(ov) is not None
+                        for ov in (self.override_switch or [])
+                    }
+                    if isinstance(self.override_switch, (list, tuple, set))
+                    else (
+                        self.hass.states.get(self.override_switch) is not None
+                        if self.override_switch
+                        else False
+                    )
+                ),
+                "lights": {
+                    lid: self.hass.states.get(lid) is not None for lid in flattened
+                },
             },
             "listeners_count": len(self._unsubscribers),
             "current_state": self._current_state,
         }
+
+    def _all_configured_lights(self) -> list[str]:
+        """Return a de-duplicated flat list of all configured lights."""
+        combined: list[str] = []
+        combined.extend(self.background_lights)
+        combined.extend(self.feature_lights)
+        combined.extend(self.ceiling_lights)
+        # De-duplicate while preserving order
+        seen: set[str] = set()
+        result: list[str] = []
+        for light in combined:
+            if light and light not in seen:
+                seen.add(light)
+                result.append(light)
+        return result
 
     def _is_integration_context(self, ctx: Context | None) -> bool:
         """Return True if the context belongs to an integration-originated service call."""

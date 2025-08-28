@@ -19,13 +19,13 @@ CONF_MOTION_ACTIVATION = "motion_activation"  # Enable/disable motion-based cont
 CONF_EXTENDED_TIMEOUT = "extended_timeout"  # Time before lights turn off
 
 # Default values
-DEFAULT_NO_MOTION_WAIT = 120
-DEFAULT_BRIGHTNESS_DAY = 60
+DEFAULT_NO_MOTION_WAIT = 300
+DEFAULT_BRIGHTNESS_DAY = 30
 DEFAULT_BRIGHTNESS_NIGHT = 1
 
 # New defaults
 DEFAULT_MOTION_ACTIVATION = True  # Motion detection enabled by default
-DEFAULT_EXTENDED_TIMEOUT = 600  # 10 minutes before lights turn off
+DEFAULT_EXTENDED_TIMEOUT = 1200  # 20 minutes before lights turn off
 
 
 # State constants (public strings used by sensors/diagnostics)

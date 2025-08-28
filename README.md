@@ -19,16 +19,16 @@ Motion Lights Advanced provides a unified coordinator that manages both automati
 
 ## State Machine
 
-The integration uses a clear 6-state machine:
+The integration uses a clear 7-state machine:
 
 | State | Description | Timer Active |
 |-------|-------------|--------------|
 | `idle` | No lights on, no automation active | ❌ |
 | `motion-auto` | Motion detected, automation in control | ❌ (motion cancels timers) |
 | `motion-manual` | Motion detected, user modified lights | ❌ (timer deferred until motion off) |
-| `auto` | Motion ended, automation lights on with timer | ✅ Motion timer (120s default) |
-| `manual` | Motion ended, user lights on with timer | ✅ Extended timer (600s default) |
-| `manual-off` | User turned lights off while in `auto`; temporary override blocking auto-on | ✅ Extended timer (600s default) |
+| `auto` | Motion ended, automation lights on with timer | ✅ Motion timer (300s default) |
+| `manual` | Motion ended, user lights on with timer | ✅ Extended timer (1200s default) |
+| `manual-off` | User turned lights off while in `auto`; temporary override blocking auto-on | ✅ Extended timer (1200s default) |
 | `overridden` | Override switch active, all automation blocked | ❌ |
 
 ## Behavior Details
@@ -53,29 +53,31 @@ The integration uses a clear 6-state machine:
 ## Light Control Logic
 
 ### Time-Based Brightness
-- **Night Mode**: When optional dark outside entity is "on", uses night brightness level (default 10%)
-- **Day Mode**: When dark outside entity is "off" or not configured, uses day brightness level (default 60%)
-- **Day brightness = 0%**: Disables automatic motion activation during day hours
-- **Dark Outside Entity**: Optional switch or binary sensor to determine night/day mode (if not configured, defaults to day mode)
+- Night Mode: When optional dark outside entity is "on", uses night brightness level (default 1%)
+- Day Mode: When dark outside entity is "off" or not configured, uses day brightness level (default 30%)
+- Day brightness = 0%: Disables automatic motion activation during day hours
+- Dark Outside Entity: Optional switch or binary sensor to determine night/day mode (if not configured, defaults to day mode)
 
 ### Light Integration
-The integration controls three separate light entities (background, feature, ceiling lights) with intelligent brightness rules based on time of day. Future versions will simplify this to a single combined light entity.
+The integration controls three separate light groups (background, feature, ceiling). You can assign multiple light entities to each group.
 
 ## Configuration Options
 
+All fields in the UI are optional. Motion sensors and light groups support selecting multiple entities.
+
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Motion Sensor | Binary sensor for motion detection | Required |
-| Background Light | Light entity for background/accent lighting | Required |
-| Feature Light | Light entity for feature/ambient lighting | Required |
-| Ceiling Light | Light entity for main/overhead lighting | Required |
-| Override Switch | Input boolean to disable automation | Required |
-| Dark Outside Entity | Switch or binary sensor to determine night/day mode | Optional |
-| Motion Activation | Enable/disable automatic light turn-on | `true` |
-| No Motion Wait | Seconds before turning lights off after motion stops | `120` |
-| Extended Timeout | Seconds before turning off manual lights | `600` |
-| Day Brightness | Brightness percentage during day (0% = disabled) | `0` |
-| Night Brightness | Brightness percentage during night | `1` |
+| Motion Sensor(s) | One or more binary_sensor.motion entities | None |
+| Background Light(s) | One or more light entities for background/accent lighting | None |
+| Feature Light(s) | One or more light entities for feature/ambient lighting | None |
+| Ceiling Light(s) | One or more light entities for main/overhead lighting | None |
+| Override Switch | A switch to disable all automation | None |
+| Dark Outside Entity | Switch or binary_sensor to determine night/day | None |
+| Motion Activation | Enable/disable automatic turn-on from motion | `true` |
+| No Motion Wait | Seconds to wait after motion stops before auto-off | `300` |
+| Extended Timeout | Seconds before turning off when in manual state | `1200` |
+| Day Brightness | Brightness during day (0% disables auto-on) | `30` |
+| Night Brightness | Brightness during night | `1` |
 
 ## Manual Intervention Detection
 
@@ -105,53 +107,44 @@ The integration detects manual changes as:
 
 ## Sensor Data
 
-The integration provides a comprehensive sensor entity exposing essential status and debugging information:
+The integration provides a sensor entity with essential status and debugging information:
 
 ### Current Status
-- **current_state**: Current state machine state (idle, motion-auto, motion-manual, auto, manual, manual-off, overridden)
-- **motion_detected**: Real-time motion sensor status (true/false)
-- **override_active**: Override switch status (true/false)
+- current_state: Current state (idle, motion-auto, motion-manual, auto, manual, manual-off, overridden)
+- motion_detected: Real-time motion status (true/false)
+- override_active: Override switch status (true/false)
 
 ### Timer Information
-- **timer_active**: Whether any timer is currently running (true/false)
-- **time_until_action**: Seconds remaining until next automatic action (number or null)
-- **next_action_time**: ISO timestamp of when next action will occur
+- timer_active: Whether a timer is running (true/false)
+- time_until_action: Seconds remaining until next automatic action (number or null)
+- next_action_time: ISO timestamp of when the next action will occur
 
 ### Debugging Information
-- **manual_reason**: Explanation of why system is in manual state (most useful for troubleshooting)
+- manual_reason: Why the system is in manual state (when applicable)
 
 ### Configuration Info
-- **motion_activation_enabled**: Current motion activation setting
-- **day_brightness**: Configured day brightness percentage
-- **night_brightness**: Configured night brightness percentage
-- **no_motion_wait**: Motion timer duration in seconds
-- **extended_timeout**: Extended timer duration in seconds
+- motion_activation_enabled, day_brightness, night_brightness, no_motion_wait, extended_timeout
 
 ### Entity Assignments
-- **motion_entity**: Motion sensor entity ID being monitored
-- **background_light**: Background light entity ID being controlled
-- **feature_light**: Feature light entity ID being controlled
-- **ceiling_light**: Ceiling light entity ID being controlled
-- **override_switch**: Override switch entity ID
-- **dark_outside_entity**: Dark outside switch/binary sensor entity ID (optional)
+- motion_entity, background_light, feature_light, ceiling_light, override_switch
 
-### Statistics
-- **motion_count**: Total motion events detected since startup
-- **last_motion_time**: ISO timestamp of last motion detection
+### Simple Stats
+- last_motion_time: ISO timestamp of last motion detection
 
 ## Installation
 
+Requirements: Home Assistant 2024.12+ and Python 3.12+
+
 1. Copy the `motion-lights-adv` folder to your `custom_components` directory
 2. Restart Home Assistant
-3. Go to Configuration → Integrations → Add Integration
+3. Go to Settings → Devices & Services → Add Integration
 4. Search for "Motion Lights Advanced" and configure
 
 ## Testing
 
-Run all tests with coverage:
+Run the repository tests:
 ```bash
-# From Home Assistant core directory
-pytest ./ --cov=homeassistant.components.motion-lights-adv --cov-report=term-missing -v
+pytest -q
 ```
 
 ## Troubleshooting
@@ -187,31 +180,32 @@ logger:
 
 ### Service Commands
 
-The integration provides a refresh service for troubleshooting:
+The integration provides a refresh service for troubleshooting entity availability:
 ```yaml
-service: motion-lights-adv.refresh_tracking
-target:
-  entity_id: sensor.motion_lights_study
+service: motion_lights_adv.refresh_tracking
+data:
+  config_entry_id: "<your_config_entry_id>"
 ```
+Tip: Find the config entry ID in Settings → Devices & Services → Motion Lights Advanced → three-dots menu.
 
 ## Technical Details
 
 ### Architecture
-- **Event-driven**: Uses `async_track_state_change_event` for real-time responsiveness
-- **Context tracking**: Distinguishes integration vs. external changes via Home Assistant context IDs
-- **State machine**: Strict 7-state finite state machine for predictable behavior
-- **Timer management**: Single active timer with proper cancellation and restart logic
+- Event-driven: Uses `async_track_state_change_event` for real-time responsiveness
+- Context tracking: Distinguishes integration vs. external changes via Home Assistant context IDs
+- State machine: Strict 7-state finite state machine for predictable behavior
+- Timer management: Single active timer with proper cancellation and restart logic
 
 ### Performance
-- **No polling**: Pure event-driven operation
-- **Minimal overhead**: Only tracks configured entities
-- **Async design**: Non-blocking integration with Home Assistant core
+- No polling: Pure event-driven operation
+- Minimal overhead: Only tracks configured entities
+- Async design: Non-blocking integration with Home Assistant core
 
 ### Integration Quality
-- **Config flow**: Full UI-based configuration
-- **Translations**: Support for multiple languages
-- **Diagnostics**: Comprehensive state information for troubleshooting
-- **Services**: Refresh and debug services available
+- Config flow: Full UI-based configuration (multi-entity selectors)
+- Translations: Support for multiple languages
+- Diagnostics: Comprehensive state information for troubleshooting
+- Services: Refresh tracking service available
 
 ## Contributing
 
@@ -227,19 +221,16 @@ Contributions are welcome! Please ensure:
 # Clone the repository
 git clone https://github.com/recallfx/ha-motion-lights-adv.git
 
-# Set up development environment
-cd motion-lights-adv
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate  # Windows
+# Set up development environment (Python 3.12)
+cd ha-motion-lights-adv
+python3.12 -m venv .venv
+source .venv/bin/activate
 
-# Install development dependencies
-pip install homeassistant pytest pytest-cov
+# Install dev dependencies
+pip install "homeassistant>=2024.12.0" "pytest>=8.3.4" "pytest-cov" "ruff>=0.9.7" "pyyaml>=6.0.2"
 
 # Run tests
-python test_logic.py
-python -m pytest test_motion_coordinator.py -v
+pytest -q
 ```
 
 ## License
@@ -248,17 +239,15 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Changelog
 
-### v3.0.0 (Current)
-- **🔧 Enhanced night/day detection**: Dark outside entity can now be either switch or binary sensor
-- **📁 Repository restructure**: Renamed folder to `motion-lights-adv` for consistency
-- **🎯 Improved flexibility**: Better support for various time-of-day detection methods
-- **✅ Maintained all core functionality**: Same state machine and timer logic with three separate light entities
-- **🧪 Verified through testing**: All logic tests pass with enhanced dark outside detection
+### v3.1.0 (Current)
+- Multi-entity support in the config flow (select multiple motion sensors and lights per group)
+- Defaults updated: no_motion_wait=300s, extended_timeout=1200s, day_brightness=30%, night_brightness=1%
+- Refresh service signature now requires config_entry_id
+- Improved dark-outside handling (supports switch or binary_sensor)
+- Docs and troubleshooting updates
 
-**Migration from v2.x:**
-- Update folder name from `motion_lights_adv` to `motion-lights-adv`
-- Dark outside entity configuration now supports both switches and binary sensors
-- All other settings and behavior remain the same
+Migration from v3.0.x:
+- Update any automations calling the refresh service to use `motion_lights_adv.refresh_tracking` with `config_entry_id`
 
 ### v2.0.0
 - **Unified coordinator**: Merged motion and manual coordinators into single state machine
