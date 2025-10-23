@@ -7,7 +7,6 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/recallfx/motion_lights_automation",
-  "icon": "icon.svg",
   "integration_type": "service",
   "iot_class": "calculated",
   "quality_scale": "bronze",

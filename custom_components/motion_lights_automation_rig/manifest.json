@@ -4,7 +4,6 @@
   "codeowners": ["@recallfx"],
   "config_flow": true,
   "documentation": "https://github.com/recallfx/motion_lights_Automation",
-  "icon": "icon.svg",
   "iot_class": "local_polling",
   "quality_scale": "bronze",
   "requirements": [],
