@@ -9,6 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
+import asyncio
 import logging
 
 from homeassistant.core import Context, HomeAssistant
@@ -68,17 +69,17 @@ class BrightnessStrategy(ABC):
 
 
 class TimeOfDayBrightnessStrategy(BrightnessStrategy):
-    """Default strategy that uses day/night brightness levels."""
+    """Default strategy that uses active/inactive brightness levels."""
 
-    def __init__(self, day_brightness: int = 60, night_brightness: int = 10):
-        """Initialize with day and night brightness levels."""
-        self.day_brightness = day_brightness
-        self.night_brightness = night_brightness
+    def __init__(self, active_brightness: int = 80, inactive_brightness: int = 10):
+        """Initialize with active and inactive brightness levels."""
+        self.active_brightness = active_brightness
+        self.inactive_brightness = inactive_brightness
 
     def get_brightness(self, context: dict[str, Any]) -> int:
-        """Get brightness based on time of day."""
-        is_night = context.get("is_night", False)
-        return self.night_brightness if is_night else self.day_brightness
+        """Get brightness based on house activity level."""
+        is_inactive = context.get("is_inactive", False)
+        return self.inactive_brightness if is_inactive else self.active_brightness
 
 
 class LightSelectionStrategy(ABC):
@@ -327,12 +328,24 @@ class LightController:
             ctx = Context()
             self._context_tracking.add(ctx.id)
             
-            await self.hass.services.async_call(
-                "light",
-                f"turn_{state}",
-                service_data,
-                context=ctx,
-            )
+            # Call light service with 10-second timeout
+            try:
+                await asyncio.wait_for(
+                    self.hass.services.async_call(
+                        "light",
+                        f"turn_{state}",
+                        service_data,
+                        context=ctx,
+                    ),
+                    timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "Light service call timed out for %s (turn_%s)",
+                    entity_id,
+                    state,
+                )
+                return False
             
             _LOGGER.debug(
                 "Set light %s to %s (brightness: %d%%)",

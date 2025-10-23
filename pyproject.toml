@@ -1,6 +1,6 @@
 [project]
-name = "custom_components.motion-lights-adv"
-version = "3.1.0"
+name = "custom_components.motion_lights_automation"
+version = "4.0.0"
 description = "A sophisticated Home Assistant custom integration providing intelligent motion-activated lighting with comprehensive manual override detection and automatic energy-saving features."
 maintainers = [
   {name = "Marius Bieliauskas", email = "mbieliau@gmail.com"}
@@ -37,11 +37,11 @@ dev = [
 ]
 
 [project.urls]
-"Source Code" = "https://github.com/recallfx/ha-motion-lights-adv"
-"Bug Reports" = "https://github.com/recallfx/ha-motion-lights-adv/issues"
+"Source Code" = "https://github.com/recallfx/motion_lights_automation"
+"Bug Reports" = "https://github.com/recallfx/motion_lights_automation/issues"
 
 [tool.setuptools]
-py-modules = ["custom_components.motion-lights-adv"]
+py-modules = ["custom_components.motion_lights_automation"]
 
 [tool.ruff]
 src = ["src", "tests"]

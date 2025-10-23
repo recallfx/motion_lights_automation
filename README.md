@@ -1,266 +1,464 @@
-# Motion Lights Advanced
+# Motion Lights Automation
 
-A sophisticated Home Assistant custom integration providing intelligent motion-activated lighting with comprehensive manual override detection and automatic energy-saving features.
+[![GitHub release](https://img.shields.io/github/release/recallfx/motion_lights_automation.svg)](https://github.com/recallfx/motion_lights_automation/releases)
+[![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/recallfx/motion_lights_automation)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+**Intelligent motion-activated lighting with state machine control for Home Assistant**
 
-Motion Lights Advanced provides a unified coordinator that manages both automatic motion lighting and manual light control with intelligent timeout management. The integration follows a strict state machine approach to ensure predictable behavior across all scenarios.
-
-## Core Features
-
-### ✅ Two Main Tasks
-1. **Automatic Light ON**: Turn lights on automatically when motion is detected (respects motion activation setting and override switch)
-2. **Automatic Light OFF**: Turn lights off automatically after configurable timeouts for energy saving (works even with motion activation disabled)
-
-### ✅ Secondary Functions
-- **Day/Night Brightness Control**: Automatically adjust brightness based on time of day
-- **Manual Intervention Detection**: Detect when users manually adjust lights and extend timeouts appropriately
-- **Override Protection**: Complete automation blocking when override switch is active
-
-## State Machine
-
-The integration uses a clear 7-state machine:
-
-| State | Description | Timer Active |
-|-------|-------------|--------------|
-| `idle` | No lights on, no automation active | ❌ |
-| `motion-auto` | Motion detected, automation in control | ❌ (motion cancels timers) |
-| `motion-manual` | Motion detected, user modified lights | ❌ (timer deferred until motion off) |
-| `auto` | Motion ended, automation lights on with timer | ✅ Motion timer (300s default) |
-| `manual` | Motion ended, user lights on with timer | ✅ Extended timer (1200s default) |
-| `manual-off` | User turned lights off while in `auto`; temporary override blocking auto-on | ✅ Extended timer (1200s default) |
-| `overridden` | Override switch active, all automation blocked | ❌ |
-
-## Behavior Details
-
-### Motion Activation Enabled (Default)
-1. **Motion ON** → Turn on appropriate lights → **MOTION-AUTO** state
-2. **Motion OFF** from `motion-auto` → Start motion timer → **AUTO** state
-3. **Timer expires** → Turn off lights → **IDLE** state
-4. **Manual changes during motion** → **MOTION-MANUAL** (timer deferred until motion OFF)
-5. **Manual changes during AUTO** → Cancel motion timer, start extended timer → **MANUAL** state
-6. **User turns lights OFF during AUTO** → Cancel motion timer, start extended timer → **MANUAL-OFF** (blocks auto-on until timer expires)
-
-### Motion Activation Disabled
-- **Motion detection** → No automatic light changes, any existing lights marked as **MANUAL**
-- **Manual light changes** → **MANUAL** state with extended timer for automatic turn-off
-- **Timer expires** → Turn off lights → **IDLE** state
-
-### Override Switch Behavior
-- **Override ON** → Cancel all timers → **OVERRIDDEN** state (no automation)
-- **Override OFF** → Evaluate current conditions and set appropriate state with timers
-
-## Light Control Logic
-
-### Time-Based Brightness
-- Night Mode: When optional dark outside entity is "on", uses night brightness level (default 1%)
-- Day Mode: When dark outside entity is "off" or not configured, uses day brightness level (default 30%)
-- Day brightness = 0%: Disables automatic motion activation during day hours
-- Dark Outside Entity: Optional switch or binary sensor to determine night/day mode (if not configured, defaults to day mode)
-
-### Light Integration
-The integration controls three separate light groups (background, feature, ceiling). You can assign multiple light entities to each group.
-
-## Configuration Options
-
-All fields in the UI are optional. Motion sensors and light groups support selecting multiple entities.
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Motion Sensor(s) | One or more binary_sensor.motion entities | None |
-| Background Light(s) | One or more light entities for background/accent lighting | None |
-| Feature Light(s) | One or more light entities for feature/ambient lighting | None |
-| Ceiling Light(s) | One or more light entities for main/overhead lighting | None |
-| Override Switch | A switch to disable all automation | None |
-| Dark Outside Entity | Switch or binary_sensor to determine night/day | None |
-| Motion Activation | Enable/disable automatic turn-on from motion | `true` |
-| No Motion Wait | Seconds to wait after motion stops before auto-off | `300` |
-| Extended Timeout | Seconds before turning off when in manual state | `1200` |
-| Day Brightness | Brightness during day (0% disables auto-on) | `30` |
-| Night Brightness | Brightness during night | `1` |
-
-## Manual Intervention Detection
-
-The integration detects manual changes as:
-- **Light turned ON/OFF** by user or other automation
-- **Brightness changes** greater than 2% threshold
-- Any change **not** originating from this integration (tracked via Home Assistant context IDs)
-
-### Manual Change Responses
-- During **MOTION-AUTO** state: Switch to **MOTION-MANUAL**, defer timer until motion ends
-- During **AUTO** state: Cancel motion timer, start extended timer, switch to **MANUAL**
-- During **IDLE** state: Start extended timer, switch to **MANUAL**
-- Motion activation disabled: Always start extended timer for any manual changes
-
-## Energy Saving Features
-
-### Automatic Turn-Off Scenarios
-1. **Motion timer expires** (AUTO state) → Turn off motion-activated lights
-2. **Extended timer expires** (MANUAL state) → Turn off manually controlled lights
-3. **All lights turned off externally** → Return to IDLE state
-
-### Timer Postponement
-- **New motion during AUTO** → Cancel timer, return to MOTION-AUTO
-- **New motion during MANUAL** → Cancel timer, return to MOTION-MANUAL
-- **Manual changes during AUTO** → Switch to extended timer (MANUAL)
-- **Manual OFF during AUTO** → Switch to extended timer (MANUAL-OFF), ignores motion until timer expires
-
-## Sensor Data
-
-The integration provides a sensor entity with essential status and debugging information:
-
-### Current Status
-- current_state: Current state (idle, motion-auto, motion-manual, auto, manual, manual-off, overridden)
-- motion_detected: Real-time motion status (true/false)
-- override_active: Override switch status (true/false)
-
-### Timer Information
-- timer_active: Whether a timer is running (true/false)
-- time_until_action: Seconds remaining until next automatic action (number or null)
-- next_action_time: ISO timestamp of when the next action will occur
-
-### Debugging Information
-- manual_reason: Why the system is in manual state (when applicable)
-
-### Configuration Info
-- motion_activation_enabled, day_brightness, night_brightness, no_motion_wait, extended_timeout
-
-### Entity Assignments
-- motion_entity, background_light, feature_light, ceiling_light, override_switch
-
-### Simple Stats
-- last_motion_time: ISO timestamp of last motion detection
-
-## Installation
-
-Requirements: Home Assistant 2024.12+ and Python 3.12+
-
-1. Copy the `motion-lights-adv` folder to your `custom_components` directory
-2. Restart Home Assistant
-3. Go to Settings → Devices & Services → Add Integration
-4. Search for "Motion Lights Advanced" and configure
-
-## Testing
-
-Run the repository tests:
-```bash
-pytest -q
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Lights not turning off automatically:**
-- Check if motion activation is enabled in configuration
-- Verify override switch is not active
-- Check sensor entity for timer status and manual reason
-
-**Motion not turning on lights:**
-- Verify motion activation is enabled
-- Check if override switch is active
-- Ensure all light entities are properly configured
-- Verify day brightness is > 0% if testing during day mode (when dark outside entity is off or not configured)
-
-**Manual detection not working:**
-- Verify all light entities are properly configured in the integration
-- Check if changes are being made by other automations
-- Review event log in sensor attributes
-
-### Debug Logging
-
-Add to `configuration.yaml`:
-```yaml
-logger:
-  default: warning
-  logs:
-    custom_components.motion-lights-adv: debug
-    custom_components.motion-lights-adv.motion_coordinator: debug
-```
-
-### Service Commands
-
-The integration provides a refresh service for troubleshooting entity availability:
-```yaml
-service: motion_lights_adv.refresh_tracking
-data:
-  config_entry_id: "<your_config_entry_id>"
-```
-Tip: Find the config entry ID in Settings → Devices & Services → Motion Lights Advanced → three-dots menu.
-
-## Technical Details
-
-### Architecture
-- Event-driven: Uses `async_track_state_change_event` for real-time responsiveness
-- Context tracking: Distinguishes integration vs. external changes via Home Assistant context IDs
-- State machine: Strict 7-state finite state machine for predictable behavior
-- Timer management: Single active timer with proper cancellation and restart logic
-
-### Performance
-- No polling: Pure event-driven operation
-- Minimal overhead: Only tracks configured entities
-- Async design: Non-blocking integration with Home Assistant core
-
-### Integration Quality
-- Config flow: Full UI-based configuration (multi-entity selectors)
-- Translations: Support for multiple languages
-- Diagnostics: Comprehensive state information for troubleshooting
-- Services: Refresh tracking service available
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-
-1. **Follow Home Assistant guidelines**: Use config flows, proper translations, async patterns
-2. **Maintain test coverage**: Add tests for new functionality
-3. **Update documentation**: Keep README and code comments current
-4. **Preserve state machine**: Changes should fit within the existing 7-state model
-
-### Development Setup
-```bash
-# Clone the repository
-git clone https://github.com/recallfx/ha-motion-lights-adv.git
-
-# Set up development environment (Python 3.12)
-cd ha-motion-lights-adv
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-# Install dev dependencies
-pip install "homeassistant>=2024.12.0" "pytest>=8.3.4" "pytest-cov" "ruff>=0.9.7" "pyyaml>=6.0.2"
-
-# Run tests
-pytest -q
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Changelog
-
-### v3.1.0 (Current)
-- Multi-entity support in the config flow (select multiple motion sensors and lights per group)
-- Defaults updated: no_motion_wait=300s, extended_timeout=1200s, day_brightness=30%, night_brightness=1%
-- Refresh service signature now requires config_entry_id
-- Improved dark-outside handling (supports switch or binary_sensor)
-- Docs and troubleshooting updates
-
-Migration from v3.0.x:
-- Update any automations calling the refresh service to use `motion_lights_adv.refresh_tracking` with `config_entry_id`
-
-### v2.0.0
-- **Unified coordinator**: Merged motion and manual coordinators into single state machine
-- **Enhanced motion activation**: Separate control for auto-on vs auto-off behavior
-- **Improved manual detection**: Better detection of external light changes
-- **Comprehensive testing**: Full test suite for all functionality
-- **Energy saving priority**: Lights turn off automatically even when motion activation disabled
-
-### v1.x (Legacy)
-- Initial release with separate motion and manual coordinators
-- Basic motion detection and manual override
-- Simple timeout management
+Motion Lights Automation is a Home Assistant integration that provides sophisticated automatic lighting control based on motion detection, with support for manual interventions, override switches, and flexible brightness modes.
 
 ---
 
-*For support, please check the [issues page](https://github.com/recallfx/ha-motion-lights-adv/issues) or Home Assistant Community forums.*
+## ✨ Features
+
+### Core Capabilities
+- ✅ **Multi-sensor support** - Use multiple motion sensors for a single lighting zone
+- ✅ **Three-tier lighting** - Ceiling, background, and feature lights with independent control
+- ✅ **State machine** - 7 distinct states with intelligent transitions
+- ✅ **Manual intervention detection** - Automatically detects and respects manual control
+- ✅ **Override switch** - Temporarily disable automation without removing configuration
+- ✅ **Dual timer system** - Motion timer + extended timer for flexible control
+- ✅ **Active/Inactive brightness** - Different brightness levels based on house activity
+- ✅ **House active switch** - Control brightness based on home occupancy/activity
+- ✅ **Dark outside sensor** - Adjust brightness based on ambient light conditions
+- ✅ **Full UI configuration** - No YAML required
+
+### Advanced Features
+- 🎯 **Priority brightness logic** - house_active > dark_outside > default active mode
+- 🔄 **Reconfiguration support** - Update settings without removing the integration
+- 📊 **Status sensor** - Real-time monitoring of automation state
+- ⚡ **Event-driven** - No polling, instant response to changes
+- 🎨 **Modular architecture** - Extensible brightness and light selection strategies
+
+---
+
+## 📦 Installation
+
+### HACS (Recommended)
+
+1. Open HACS in Home Assistant
+2. Go to "Integrations"
+3. Click the three dots in the top right corner
+4. Select "Custom repositories"
+5. Add this repository URL: `https://github.com/recallfx/motion_lights_automation`
+6. Select category: "Integration"
+7. Click "Add"
+8. Search for "Motion Lights Automation" and install
+9. Restart Home Assistant
+10. Go to **Settings** → **Devices & Services** → **Add Integration**
+11. Search for "Motion Lights Automation"
+
+### Manual Installation
+
+1. Copy the `custom_components/motion_lights_automation` folder to your Home Assistant `custom_components` directory:
+   ```
+   <config>/custom_components/motion_lights_automation/
+   ```
+
+2. Restart Home Assistant
+
+3. Go to **Settings** → **Devices & Services** → **Add Integration**
+
+4. Search for "Motion Lights Automation" and click to add
+
+---
+
+## 🚀 Quick Start
+
+### Basic Setup (Step 1)
+
+Configure the essential entities:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Name** | Yes | Friendly name for this automation (e.g., "Kitchen Motion Lights") |
+| **Motion Sensors** | Yes | One or more motion sensors that trigger the lights |
+| **Ceiling Lights** | No | Main overhead/ceiling lights |
+| **Background Lights** | No | Ambient/background lighting |
+| **Feature Lights** | No | Accent/feature lights |
+| **Override Switch** | No | Switch to temporarily disable automation |
+| **House Active Switch** | No | Switch indicating house is active (for brightness control) |
+| **Dark Outside Sensor** | No | Binary sensor indicating darkness (e.g., sun below horizon) |
+
+**Note:** At least one light type (ceiling, background, or feature) must be configured.
+
+### Advanced Settings (Step 2)
+
+Fine-tune the behavior:
+
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| **Motion Activation** | Enabled | On/Off | Enable/disable motion detection |
+| **No Motion Wait** | 300s | 0-3600s | Seconds to wait after motion stops before turning off |
+| **Extended Timeout** | 1200s | 0-7200s | Additional time for manual/auto modes before returning to idle |
+| **Brightness Active** | 80% | 0-100% | Brightness when house is active |
+| **Brightness Inactive** | 10% | 0-100% | Brightness when house is inactive |
+
+---
+
+## 🎯 How It Works
+
+### State Machine
+
+The integration operates through a 7-state machine:
+
+```
+┌─────────┐
+│  IDLE   │ ← Lights off, no motion
+└────┬────┘
+     │ motion detected
+     ↓
+┌──────────────┐
+│ MOTION_AUTO  │ ← Lights turned on automatically
+└──┬────┬──────┘
+   │    │ motion timer expires
+   │    ↓
+   │  ┌──────┐
+   │  │ AUTO │ ← Motion timer active
+   │  └──┬───┘
+   │     │ timer expires
+   │     ↓
+   │  ┌─────┐
+   │  │IDLE │
+   │  └─────┘
+   │
+   │ manual intervention detected
+   ↓
+┌───────────────┐
+│ MOTION_MANUAL │ ← Manual control during motion
+└───────┬───────┘
+        │ motion timer expires
+        ↓
+   ┌────────┐
+   │ MANUAL │ ← Extended timer active
+   └───┬────┘
+       │ extended timer expires OR lights manually off
+       ↓
+   ┌─────────────┐
+   │ MANUAL_OFF  │ ← User turned off lights
+   └──────┬──────┘
+          │ motion detected
+          ↓
+        ┌──────────────┐
+        │ MOTION_AUTO  │
+        └──────────────┘
+
+┌─────────────┐
+│ OVERRIDDEN  │ ← Override switch ON
+└─────────────┘
+```
+
+### Brightness Logic
+
+Priority system for determining brightness:
+
+**Priority 1: House Active Switch** (if configured)
+- Switch ON → Use `brightness_active` (default 80%)
+- Switch OFF → Use `brightness_inactive` (default 10%)
+
+**Priority 2: Dark Outside Sensor** (if configured and no house_active)
+- Dark outside OFF (light outside) → Use `brightness_active`
+- Dark outside ON (dark outside) → Use `brightness_inactive`
+
+**Priority 3: Default** (no switches configured)
+- Always use `brightness_active`
+
+### Use Case Example
+
+In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM):
+1. Add a `house_active` switch (e.g., `input_boolean.house_active`)
+2. Create an automation to turn it OFF at 10 PM
+3. Lights will be bright (80%) until 10 PM, then dim (10%) for nighttime movement
+
+---
+
+## 💡 Examples
+
+### Example 1: Simple Bedroom
+
+**Goal:** Turn on bedroom lights when motion detected, turn off after 5 minutes.
+
+**Configuration:**
+- Motion Sensors: `binary_sensor.bedroom_motion`
+- Ceiling Lights: `light.bedroom_ceiling`
+- No Motion Wait: `300` (5 minutes)
+- Brightness Active: `80`
+- Brightness Inactive: `20`
+
+### Example 2: Kitchen with Day/Night Modes
+
+**Goal:** Bright lights during the day, dim lights at night.
+
+**Configuration:**
+- Motion Sensors: `binary_sensor.kitchen_motion`
+- Ceiling Lights: `light.kitchen_ceiling`
+- Background Lights: `light.kitchen_under_cabinet`
+- Dark Outside: `binary_sensor.sun_below_horizon`
+- No Motion Wait: `300`
+- Brightness Active: `100` (day mode)
+- Brightness Inactive: `10` (night mode)
+
+### Example 3: Living Room with House Active Mode
+
+**Goal:** Bright lights when house is active, dim lights when winding down.
+
+**Configuration:**
+- Motion Sensors: `binary_sensor.living_room_motion`
+- Ceiling Lights: `light.living_room_main`
+- Background Lights: `light.living_room_lamp_1`, `light.living_room_lamp_2`
+- Feature Lights: `light.living_room_accent`
+- House Active: `input_boolean.house_active`
+- No Motion Wait: `600` (10 minutes)
+- Extended Timeout: `1800` (30 minutes)
+- Brightness Active: `90`
+- Brightness Inactive: `15`
+
+**Helper Automations:**
+```yaml
+# Morning - House Active ON
+automation:
+  - alias: "House Active - Morning"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.house_active
+
+  # Evening - House Active OFF
+  - alias: "House Active - Evening"
+    trigger:
+      - platform: time
+        at: "22:00:00"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.house_active
+```
+
+### Example 4: Bathroom with Override
+
+**Goal:** Auto lights normally, manual control when cleaning.
+
+**Configuration:**
+- Motion Sensors: `binary_sensor.bathroom_motion`
+- Ceiling Lights: `light.bathroom_ceiling`
+- Override Switch: `input_boolean.bathroom_override`
+- No Motion Wait: `180` (3 minutes)
+- Brightness Active: `100`
+
+---
+
+## 📊 Status Sensor
+
+The integration creates a sensor entity with comprehensive diagnostic information.
+
+**Entity ID:** `sensor.<name>_lighting_automation`
+
+**State Values:**
+- `idle` - No motion, lights off
+- `motion_auto` - Motion detected, lights on automatically
+- `auto` - Automatic mode, extended timer running
+- `motion_manual` - Manual intervention during motion
+- `manual` - Manual mode, extended timer running
+- `manual_off` - User manually turned off lights
+- `overridden` - Override switch is ON
+
+**Attributes:**
+```yaml
+current_state: auto
+timer_active: true
+time_until_action: 650
+next_action_time: "2025-10-23T10:20:15"
+motion_activation_enabled: true
+brightness_active: 80
+brightness_inactive: 10
+current_brightness_mode: active
+no_motion_wait: 300
+extended_timeout: 1200
+motion_entity: binary_sensor.kitchen_motion
+ceiling_light: light.kitchen_ceiling
+background_light: light.kitchen_under_cabinet
+override_switch: input_boolean.kitchen_override
+house_active_switch: input_boolean.house_active
+dark_outside_sensor: binary_sensor.sun_below_horizon
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Lights Don't Turn On with Motion
+
+**Check:**
+1. Motion sensor is working (verify in Developer Tools → States)
+2. Motion activation is enabled (check advanced settings)
+3. Override switch is OFF (if configured)
+4. At least one light is configured
+5. Check Home Assistant logs for errors
+
+### Lights Turn Off Too Quickly/Slowly
+
+**Solution:** Adjust **No Motion Wait** in advanced settings
+
+### Manual Control Not Detected
+
+**Check:**
+1. Brightness changes are significant (>10%)
+2. Lights are controlled via Home Assistant interface
+3. Physical wall switches may not be detected (depends on integration)
+
+**Workaround:** Use override switch for extended manual control
+
+### Brightness Not Changing
+
+**Check:**
+1. House active switch or dark outside sensor is configured
+2. Sensors are changing states correctly
+3. Check sensor attributes for `current_brightness_mode`
+
+### Debug Logging
+
+Enable detailed logging in `configuration.yaml`:
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.motion_lights_automation: debug
+```
+
+---
+
+## 🏗️ Architecture
+
+### Modular Design
+
+The integration uses a clean, modular architecture:
+
+- **Coordinator** - Orchestrates all components
+- **State Machine** - Manages state transitions
+- **Timer Manager** - Handles motion and extended timers
+- **Trigger Manager** - Manages event triggers (motion, override)
+- **Light Controller** - Controls lights with pluggable strategies
+- **Manual Detector** - Detects manual interventions
+
+### Design Patterns
+
+- **State Machine Pattern** - Clean state management
+- **Strategy Pattern** - Pluggable brightness and light selection
+- **Observer Pattern** - Coordinator listeners for state updates
+- **Manager Pattern** - Timer and trigger management
+
+### Quality
+
+**Quality Scale:** Bronze (Foundation) → Silver (In Progress)
+
+- ✅ Config flow
+- ✅ Entity unique IDs
+- ✅ Async setup
+- ✅ Config entry unloading
+- ✅ Entity unavailability handling
+- ✅ Reconfiguration support
+- ✅ Parallel updates
+
+### Testing
+
+Comprehensive test coverage with **213+ tests**:
+- State machine transitions: 60+ tests
+- Configuration flow: 45+ tests
+- Light controller: 35+ tests
+- Coordinator: 40+ tests
+- Edge cases and error handling
+
+Run tests:
+```bash
+pytest tests/
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add/update tests
+5. Submit a pull request
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/recallfx/motion_lights_automation.git
+cd motion_lights_automation
+
+# Set up virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -e .
+pip install -r requirements_dev.txt
+
+# Run tests
+pytest tests/
+```
+
+---
+
+## 📝 Changelog
+
+### Version 4.0.0 (Current)
+- ✅ Modular architecture with 5 reusable components
+- ✅ Active/Inactive brightness system (replaces day/night)
+- ✅ House active switch support
+- ✅ Priority brightness logic
+- ✅ Enhanced state machine
+- ✅ 213+ tests passing
+- ✅ Production-ready quality
+
+### Version 3.1.0
+- Multi-entity support in config flow
+- Improved dark-outside handling
+- Updated defaults
+- Refresh service improvements
+
+### Version 2.0.0
+- Unified coordinator architecture
+- Enhanced motion activation control
+- Improved manual detection
+- Comprehensive testing
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙋 Support
+
+- **Issues:** [GitHub Issues](https://github.com/recallfx/motion_lights_automation/issues)
+- **Discussions:** [Home Assistant Community](https://community.home-assistant.io/)
+- **Documentation:** See [`custom_components/motion_lights_automation/README.md`](custom_components/motion_lights_automation/README.md) for detailed documentation
+
+---
+
+## 👤 Author
+
+**Marius Bieliauskas** ([@recallfx](https://github.com/recallfx))
+
+---
+
+## ⭐ Show Your Support
+
+If this project helps you, please give it a ⭐️!
+
+---
+
+**Last Updated:** October 23, 2025

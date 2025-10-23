@@ -1,4 +1,4 @@
-"""The Motion lights adv integration."""
+"""The Motion lights automation integration."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ SERVICE_REFRESH_SCHEMA = vol.Schema(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Motion lights adv from a config entry."""
+    """Set up Motion lights automation from a config entry."""
     # Create motion coordinator (handles all motion and manual logic per tight specification)
     motion_coordinator = MotionLightsCoordinator(hass, entry)
 

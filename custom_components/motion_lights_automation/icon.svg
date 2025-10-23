@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Motion sensor body -->
+  <circle cx="100" cy="60" r="30" fill="#4A90E2" stroke="#2E5C8A" stroke-width="2"/>
+  <circle cx="100" cy="60" r="22" fill="#5BA3F5"/>
+  
+  <!-- Motion detection lens -->
+  <circle cx="100" cy="60" r="15" fill="#87CEEB" opacity="0.7"/>
+  
+  <!-- Motion waves/signals -->
+  <path d="M 100 60 Q 120 60 125 45" stroke="#FF6B6B" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 100 60 Q 130 60 140 40" stroke="#FF6B6B" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 100 60 Q 120 60 125 75" stroke="#FF6B6B" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 100 60 Q 130 60 140 80" stroke="#FF6B6B" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  
+  <!-- Automation gears (bottom right) -->
+  <g transform="translate(140, 130)">
+    <!-- Main gear -->
+    <circle cx="0" cy="0" r="16" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="10" fill="#FFB84D"/>
+    
+    <!-- Gear teeth -->
+    <rect x="-2" y="-18" width="4" height="4" fill="#FF8C00"/>
+    <rect x="-2" y="14" width="4" height="4" fill="#FF8C00"/>
+    <rect x="-18" y="-2" width="4" height="4" fill="#FF8C00"/>
+    <rect x="14" y="-2" width="4" height="4" fill="#FF8C00"/>
+  </g>
+  
+  <!-- Secondary small gear -->
+  <g transform="translate(155, 115)">
+    <circle cx="0" cy="0" r="10" fill="#FF8C00" stroke="#FF6B4A" stroke-width="1"/>
+    <circle cx="0" cy="0" r="6" fill="#FFB84D"/>
+    
+    <!-- Gear teeth -->
+    <rect x="-1.5" y="-11" width="3" height="3" fill="#FF6B4A"/>
+    <rect x="-1.5" y="8" width="3" height="3" fill="#FF6B4A"/>
+    <rect x="-11" y="-1.5" width="3" height="3" fill="#FF6B4A"/>
+  </g>
+  
+  <!-- Light indicator at bottom left -->
+  <circle cx="50" cy="145" r="12" fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+  <circle cx="50" cy="145" r="8" fill="#FFFF99" opacity="0.8"/>
+  
+  <!-- Connection line from sensor to gear -->
+  <path d="M 125 75 Q 135 100 135 115" stroke="#999" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+</svg>

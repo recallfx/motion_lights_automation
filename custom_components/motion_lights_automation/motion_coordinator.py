@@ -13,16 +13,19 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BACKGROUND_LIGHT,
-    CONF_BRIGHTNESS_DAY,
-    CONF_BRIGHTNESS_NIGHT,
+    CONF_BRIGHTNESS_ACTIVE,
+    CONF_BRIGHTNESS_INACTIVE,
     CONF_CEILING_LIGHT,
     CONF_DARK_OUTSIDE,
     CONF_EXTENDED_TIMEOUT,
     CONF_FEATURE_LIGHT,
+    CONF_HOUSE_ACTIVE,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     CONF_OVERRIDE_SWITCH,
+    DEFAULT_BRIGHTNESS_ACTIVE,
+    DEFAULT_BRIGHTNESS_INACTIVE,
     DEFAULT_EXTENDED_TIMEOUT,
     DEFAULT_MOTION_ACTIVATION,
     DEFAULT_NO_MOTION_WAIT,
@@ -83,8 +86,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             light_groups,
             brightness_strategy=TimeOfDayBrightnessStrategy(
-                day_brightness=self.brightness_day,
-                night_brightness=self.brightness_night,
+                active_brightness=self.brightness_active,
+                inactive_brightness=self.brightness_inactive,
             ),
             light_selection_strategy=TimeOfDayLightSelectionStrategy(),
         )
@@ -92,7 +95,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Manual intervention detector
         self.manual_detector = ManualInterventionDetector()
         brightness_strategy = BrightnessThresholdStrategy()
-        self.manual_detector.add_strategy(brightness_strategy)
+        # ManualInterventionDetector uses set_strategy to configure the strategy
+        self.manual_detector.set_strategy(brightness_strategy)
         
         # Set timer durations
         self.timer_manager.set_default_duration(TimerType.MOTION, self._no_motion_wait)
@@ -130,8 +134,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.override_switch = str(override_cfg) if override_cfg else None
         
         self.dark_outside = data.get(CONF_DARK_OUTSIDE)
-        self.brightness_day = data.get(CONF_BRIGHTNESS_DAY, 60)
-        self.brightness_night = data.get(CONF_BRIGHTNESS_NIGHT, 10)
+        self.house_active = data.get(CONF_HOUSE_ACTIVE)
+        self.brightness_active = data.get(CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE)
+        self.brightness_inactive = data.get(CONF_BRIGHTNESS_INACTIVE, DEFAULT_BRIGHTNESS_INACTIVE)
         
         # Lights
         self.background_lights = _as_list(data.get(CONF_BACKGROUND_LIGHT))
@@ -140,6 +145,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_setup_listeners(self) -> None:
         """Set up the coordinator - wire modules together."""
+        import time
+        start_time = time.monotonic()
+        
         # Set up state machine callbacks
         self.state_machine.on_enter_state(STATE_MOTION_AUTO, self._on_enter_motion_auto)
         self.state_machine.on_enter_state(STATE_AUTO, self._on_enter_auto)
@@ -187,6 +195,21 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         
         # Update data
         self._update_data()
+        
+        # Schedule periodic cleanup of old context IDs (every hour)
+        self._schedule_periodic_cleanup()
+        
+        # Log startup performance
+        elapsed = time.monotonic() - start_time
+        total_lights = len(all_lights) if all_lights else 0
+        active_timers = self.timer_manager._timers.__len__() if hasattr(self.timer_manager, '_timers') else 0
+        
+        _LOGGER.info(
+            "Motion Lights Automation initialized: %.2fs | Lights: %d | Timers: %d | "
+            "Motion activation: %s | Override: %s | Dark outside: %s",
+            elapsed, total_lights, active_timers,
+            self.motion_activation, bool(self.override_switch), bool(self.dark_outside)
+        )
 
     def _set_initial_state(self) -> None:
         """Set initial state based on current conditions."""
@@ -210,95 +233,185 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _handle_motion_on(self) -> None:
         """Handle motion detected."""
-        _LOGGER.info("Motion ON")
-        
-        if not self.motion_activation:
-            if self.light_controller.any_lights_on():
-                self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
-            return
-        
-        current = self.state_machine.current_state
-        
-        if current == STATE_MANUAL:
-            self.state_machine.transition(StateTransitionEvent.MOTION_ON)
-        elif current == STATE_AUTO:
-            self.timer_manager.cancel_all_timers()
-            self.state_machine.transition(StateTransitionEvent.MOTION_ON)
-        elif current in (STATE_IDLE, STATE_MANUAL_OFF):
-            self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+        try:
+            _LOGGER.info("Motion ON")
+            
+            if not self.motion_activation:
+                # When motion_activation is disabled, motion doesn't turn on lights.
+                # However, if lights are already on (manually), restart the timer.
+                if self.light_controller.any_lights_on():
+                    _LOGGER.debug("Motion detected with motion_activation=False; restarting timer")
+                    self.timer_manager.cancel_timer("extended")
+                    self.timer_manager.start_timer(
+                        "extended",
+                        TimerType.EXTENDED,
+                        self._async_timer_expired,
+                    )
+                return
+            
+            current = self.state_machine.current_state
+            
+            if current == STATE_MANUAL:
+                self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+            elif current == STATE_AUTO:
+                self.timer_manager.cancel_all_timers()
+                self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+            elif current in (STATE_IDLE, STATE_MANUAL_OFF):
+                self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+        except Exception:
+            _LOGGER.exception("Error in motion ON handler")
 
     def _handle_motion_off(self) -> None:
         """Handle motion cleared."""
-        _LOGGER.info("Motion OFF")
-        
-        current = self.state_machine.current_state
-        
-        if current == STATE_MOTION_AUTO:
-            self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
-        elif current == STATE_MOTION_MANUAL:
-            self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+        try:
+            _LOGGER.info("Motion OFF")
+            
+            current = self.state_machine.current_state
+            
+            if current == STATE_MOTION_AUTO:
+                self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+            elif current == STATE_MOTION_MANUAL:
+                self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+        except Exception:
+            _LOGGER.exception("Error in motion OFF handler")
 
     def _handle_override_on(self) -> None:
         """Handle override activated."""
-        _LOGGER.info("Override ON")
-        self.timer_manager.cancel_all_timers()
-        self.state_machine.transition(StateTransitionEvent.OVERRIDE_ON)
+        try:
+            _LOGGER.info("Override ON - current state: %s", self.state_machine.current_state)
+            self.timer_manager.cancel_all_timers()
+            result = self.state_machine.transition(StateTransitionEvent.OVERRIDE_ON)
+            _LOGGER.info("Override ON transition result: %s, new state: %s", result, self.state_machine.current_state)
+            self._update_data()
+        except Exception:
+            _LOGGER.exception("Error in override ON handler")
 
     def _handle_override_off(self) -> None:
         """Handle override deactivated."""
-        _LOGGER.info("Override OFF")
-        if self.light_controller.any_lights_on():
-            self.state_machine.transition(
-                StateTransitionEvent.OVERRIDE_OFF,
-                target_state=STATE_MANUAL,
-            )
-        else:
-            self.state_machine.transition(
-                StateTransitionEvent.OVERRIDE_OFF,
-                target_state=STATE_IDLE,
-            )
+        try:
+            _LOGGER.info("Override OFF - current state: %s", self.state_machine.current_state)
+            if self.light_controller.any_lights_on():
+                result = self.state_machine.transition(
+                    StateTransitionEvent.OVERRIDE_OFF,
+                    target_state=STATE_MANUAL,
+                )
+                _LOGGER.info("Override OFF transition to MANUAL result: %s", result)
+            else:
+                result = self.state_machine.transition(
+                    StateTransitionEvent.OVERRIDE_OFF,
+                    target_state=STATE_IDLE,
+                )
+                _LOGGER.info("Override OFF transition to IDLE result: %s", result)
+            _LOGGER.info("Override OFF new state: %s", self.state_machine.current_state)
+            self._update_data()
+        except Exception:
+            _LOGGER.exception("Error in override OFF handler")
 
     @callback
     def _async_light_changed(self, event: Event) -> None:
         """Handle light state change."""
-        entity_id = event.data.get("entity_id")
-        new_state = event.data.get("new_state")
-        old_state = event.data.get("old_state")
-        
-        if not new_state or not old_state:
-            return
-        
-        # Update light controller state
-        self.light_controller.update_light_state(entity_id, new_state)
-        
-        # Check for manual intervention
-        if not self.light_controller.is_integration_context(new_state.context):
-            is_manual = self.manual_detector.check_intervention(
-                entity_id, old_state, new_state, new_state.context
-            )
+        try:
+            entity_id = event.data.get("entity_id")
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
             
-            if is_manual:
-                self._handle_manual_intervention(entity_id, old_state, new_state)
-        
-        # Check if all lights are off
-        if not self.light_controller.any_lights_on():
-            if self.state_machine.current_state not in (STATE_OVERRIDDEN, STATE_MANUAL_OFF):
-                self.timer_manager.cancel_all_timers()
-                self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
-        
-        self._update_data()
+            if not new_state or not old_state:
+                return
+            
+            # Update light controller state
+            self.light_controller.update_light_state(entity_id, new_state)
+            
+            # Check for manual intervention
+            if not self.light_controller.is_integration_context(new_state.context):
+                is_manual = self.manual_detector.check_intervention(
+                    entity_id, old_state, new_state, new_state.context
+                )
+                
+                if is_manual:
+                    self._handle_manual_intervention(entity_id, old_state, new_state)
+            
+            # Check if all lights are off
+            if not self.light_controller.any_lights_on():
+                if self.state_machine.current_state not in (STATE_OVERRIDDEN, STATE_MANUAL_OFF):
+                    self.timer_manager.cancel_all_timers()
+                    self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
+            
+            self._update_data()
+        except Exception:
+            _LOGGER.exception("Error in light changed handler")
 
     def _handle_manual_intervention(self, entity_id, old_state, new_state) -> None:
         """Handle manual intervention detected."""
         current = self.state_machine.current_state
         
+        change_type = "ON" if new_state.state == "on" else "OFF"
+        brightness = new_state.attributes.get("brightness", "N/A")
+        
+        _LOGGER.debug(
+            "Manual intervention detected: %s changed to %s (brightness=%s) in %s state",
+            entity_id, change_type, brightness, current
+        )
+        
         if current == STATE_MOTION_AUTO:
             self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif current == STATE_MOTION_MANUAL:
+            # Already in manual mode during motion, log but don't transition
+            # However, restart any active timer to extend the grace period
+            _LOGGER.debug("Manual change during MOTION_MANUAL state - already tracking manually, no timer to restart")
+        elif current == STATE_MANUAL:
+            # User is actively adjusting lights in MANUAL state
+            if new_state.state == "off" and old_state.state == "on":
+                # User turned off a light - check if all lights are off
+                if not self.light_controller.any_lights_on():
+                    # All lights turned off, transition to MANUAL_OFF
+                    _LOGGER.info("User turned off all lights in MANUAL state - transitioning to MANUAL_OFF")
+                    self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+                else:
+                    # Some lights still on, restart timer
+                    _LOGGER.info("User turned off a light in MANUAL state - restarting extended timer")
+                    self.timer_manager.cancel_timer("extended")
+                    self.timer_manager.start_timer(
+                        "extended",
+                        TimerType.EXTENDED,
+                        self._async_timer_expired,
+                    )
+            else:
+                # Brightness adjustment or turning on more lights - restart the extended timer
+                _LOGGER.info("Manual adjustment in MANUAL state - restarting extended timer")
+                self.timer_manager.cancel_timer("extended")
+                self.timer_manager.start_timer(
+                    "extended",
+                    TimerType.EXTENDED,
+                    self._async_timer_expired,
+                )
         elif current == STATE_AUTO:
             if new_state.state == "off" and old_state.state == "on":
-                self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+                # User turned off a light - check if ALL lights are now off
+                if not self.light_controller.any_lights_on():
+                    # All lights turned off, transition to MANUAL_OFF
+                    _LOGGER.info("User turned off all lights in AUTO state - transitioning to MANUAL_OFF")
+                    self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+                else:
+                    # Some lights still on, transition to MANUAL
+                    _LOGGER.info("User turned off a light in AUTO state but some remain on - transitioning to MANUAL")
+                    self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
             else:
                 self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif current == STATE_MANUAL_OFF:
+            # User manually turned off lights, but now they're adjusting them again
+            # This means they're still active, so transition to MANUAL state
+            if new_state.state == "on" or (new_state.state == "on" and old_state.state == "on"):
+                _LOGGER.info("Manual adjustment in MANUAL_OFF state - user is active, transitioning to MANUAL")
+                self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
+            else:
+                # Another light turned off - just restart the extended timer
+                _LOGGER.info("Additional manual OFF in MANUAL_OFF state - restarting extended timer")
+                self.timer_manager.cancel_timer("extended")
+                self.timer_manager.start_timer(
+                    "extended",
+                    TimerType.EXTENDED,
+                    self._async_timer_expired,
+                )
         elif current == STATE_IDLE:
             if new_state.state == "on":
                 self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
@@ -333,7 +446,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _on_enter_manual_off(self, state=None, from_state=None, event=None) -> None:
         """Entering MANUAL_OFF - start extended timer."""
-        _LOGGER.debug("Entering MANUAL_OFF state - starting extended timer")
+        _LOGGER.debug("Entering MANUAL_OFF state - cancelling motion timer, starting extended timer")
+        self.timer_manager.cancel_timer("motion")  # Cancel any existing motion timer
         self.timer_manager.start_timer(
             "extended",
             TimerType.EXTENDED,
@@ -342,7 +456,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _on_enter_idle(self, state=None, from_state=None, event=None) -> None:
         """Entering IDLE - turn off lights."""
-        _LOGGER.debug("Entering IDLE state - turning off lights")
+        _LOGGER.debug("Entering IDLE state (from %s) - turning off lights", from_state)
         self.hass.async_create_task(self._async_turn_off_lights())
 
     def _on_transition(self, old_state: str, new_state: str, event) -> None:
@@ -376,19 +490,43 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _get_context(self):
         """Get context for strategies."""
-        is_night = False
-        if self.dark_outside:
+        # Determine if house is inactive (use dim brightness)
+        # Priority: house_active switch > dark_outside sensor > default to active
+        is_inactive = False
+        
+        if self.house_active:
+            # Priority 1: Check house_active switch
+            house_state = self.hass.states.get(self.house_active)
+            if house_state is None:
+                _LOGGER.warning(
+                    "house_active entity '%s' not found; falling back to dark_outside or active mode",
+                    self.house_active,
+                )
+            else:
+                # If house_active is OFF, house is inactive (use dim brightness)
+                is_inactive = house_state.state == "off"
+        elif self.dark_outside:
+            # Priority 2: Check dark_outside sensor
             dark_state = self.hass.states.get(self.dark_outside)
-            is_night = dark_state and dark_state.state == "on"
+            if dark_state is None:
+                _LOGGER.warning(
+                    "dark_outside entity '%s' not found; falling back to active brightness",
+                    self.dark_outside,
+                )
+            else:
+                # If it's dark outside, house is inactive (use dim brightness)
+                is_inactive = dark_state.state == "on"
+        # Else: Default to active mode (is_inactive = False)
         
         motion_trigger = self.trigger_manager.get_trigger("motion")
         motion_active = motion_trigger.is_active() if motion_trigger else False
         
         # Return dict-like context that strategies can use
         return {
-            "time_of_day": "night" if is_night else "day",
-            "is_dark": is_night,
-            "is_night": is_night,
+            "time_of_day": "inactive" if is_inactive else "active",
+            "is_dark": is_inactive,  # Keep for backward compatibility
+            "is_night": is_inactive,  # Keep for backward compatibility
+            "is_inactive": is_inactive,
             "motion_active": motion_active,
             "current_state": self.state_machine.current_state,
             "all_lights": self.light_controller.get_all_lights(),
@@ -417,6 +555,21 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Cleanup
     # ========================================================================
 
+    def _schedule_periodic_cleanup(self) -> None:
+        """Schedule periodic cleanup of old context IDs.
+        
+        This runs every hour to prevent unbounded memory growth from context tracking.
+        """
+        def cleanup_task() -> None:
+            """Perform cleanup and reschedule."""
+            _LOGGER.debug("Performing periodic context cleanup")
+            self.light_controller.cleanup_old_contexts()
+            # Reschedule for next hour
+            self.hass.loop.call_later(3600, cleanup_task)
+        
+        # Schedule first cleanup in 1 hour
+        self.hass.loop.call_later(3600, cleanup_task)
+
     async def async_refresh_light_tracking(self) -> None:
         """Refresh light state tracking (called by service)."""
         _LOGGER.info("Refreshing light state tracking")
@@ -430,6 +583,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubscribers.clear()
         self.trigger_manager.cleanup_all()
         self.timer_manager.cancel_all_timers()
+        # Final cleanup of context tracking
+        self.light_controller.cleanup_old_contexts()
 
     # ========================================================================
     # Properties for compatibility
@@ -470,10 +625,6 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def no_motion_wait_seconds(self) -> int:
         return self._no_motion_wait
 
-    @property
-    def day_brightness(self) -> int:
-        return self.brightness_day
-
-    @property
-    def night_brightness(self) -> int:
-        return self.brightness_night
+    # These properties are kept for backward compatibility and sensor access
+    # The actual values are now stored in self.brightness_active and self.brightness_inactive
+    # which are loaded from CONF_BRIGHTNESS_ACTIVE and CONF_BRIGHTNESS_INACTIVE

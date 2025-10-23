@@ -113,18 +113,20 @@ class MotionLightsStateMachine:
         self._add_transition(STATE_MOTION_AUTO, StateTransitionEvent.MANUAL_INTERVENTION, STATE_MOTION_MANUAL)
         self._add_transition(STATE_AUTO, StateTransitionEvent.MANUAL_INTERVENTION, STATE_MANUAL)
         self._add_transition(STATE_IDLE, StateTransitionEvent.MANUAL_INTERVENTION, STATE_MANUAL)
+        self._add_transition(STATE_MANUAL_OFF, StateTransitionEvent.MANUAL_INTERVENTION, STATE_MANUAL)  # User turns lights back on
         
-        # Manual OFF intervention (lights turned off during AUTO)
+        # Manual OFF intervention (lights turned off during AUTO or MANUAL)
         self._add_transition(STATE_AUTO, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF)
+        self._add_transition(STATE_MANUAL, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF)
         
         # Timer expired transitions
         self._add_transition(STATE_AUTO, StateTransitionEvent.TIMER_EXPIRED, STATE_IDLE)
         self._add_transition(STATE_MANUAL, StateTransitionEvent.TIMER_EXPIRED, STATE_IDLE)
         self._add_transition(STATE_MANUAL_OFF, StateTransitionEvent.TIMER_EXPIRED, STATE_IDLE)
         
-        # All lights off transitions
+        # All lights off transitions (for unexpected cases, not manual intervention)
         self._add_transition(STATE_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE)
-        self._add_transition(STATE_MANUAL, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE)
+        # MANUAL state handles LIGHTS_ALL_OFF via MANUAL_OFF_INTERVENTION instead
         self._add_transition(STATE_MOTION_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE)
         self._add_transition(STATE_MOTION_MANUAL, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE)
 

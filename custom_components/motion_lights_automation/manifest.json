@@ -1,12 +1,13 @@
 {
-  "domain": "motion_lights_adv",
-  "name": "Motion Lights Advanced",
+  "domain": "motion_lights_automation",
+  "name": "Motion Lights Automation",
   "codeowners": [
     "@recallfx"
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/recallfx/ha-motion-lights-adv",
+  "documentation": "https://github.com/recallfx/motion_lights_automation",
+  "icon": "icon.svg",
   "integration_type": "service",
   "iot_class": "calculated",
   "quality_scale": "bronze",
