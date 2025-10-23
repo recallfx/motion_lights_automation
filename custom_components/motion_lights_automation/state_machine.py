@@ -103,6 +103,7 @@ class MotionLightsStateMachine:
         self._add_transition(STATE_MOTION_AUTO, StateTransitionEvent.OVERRIDE_ON, STATE_OVERRIDDEN)
         self._add_transition(STATE_MOTION_MANUAL, StateTransitionEvent.OVERRIDE_ON, STATE_OVERRIDDEN)
         self._add_transition(STATE_MANUAL_OFF, StateTransitionEvent.OVERRIDE_ON, STATE_OVERRIDDEN)
+        self._add_transition(STATE_OVERRIDDEN, StateTransitionEvent.OVERRIDE_ON, STATE_OVERRIDDEN)  # Allow re-trigger
         
         # Override OFF can go to MANUAL or IDLE depending on lights
         # (handled with conditions in the coordinator)

@@ -179,11 +179,12 @@ class TimeWindowStrategy(ManualInterventionStrategy):
             )
             return False, None
         
-        # Outside window - check for significant change
+        # Inside window - check for significant change
         old_state_str = old_state.state if old_state else "unknown"
         new_state_str = new_state.state if new_state else "unknown"
         
         if old_state_str != new_state_str:
+            # We are outside the automation window here, so this is manual
             return True, f"light state changed outside automation window: {entity_id}"
         
         return False, None

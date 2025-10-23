@@ -126,12 +126,15 @@ class MotionTrigger(TriggerHandler):
             _LOGGER.warning("No motion sensors configured")
             return False
         
-        # Verify entities exist
+        # Verify entities exist (warn but continue)
         missing = [eid for eid in self.entity_ids if not self.hass.states.get(eid)]
         if missing:
-            _LOGGER.warning("Motion sensors not found: %s", missing)
+            _LOGGER.warning(
+                "Motion sensors not yet available: %s (will monitor once they appear)",
+                missing
+            )
         
-        # Set up state change tracking
+        # Set up state change tracking (works even if entities don't exist yet)
         self._unsubscribers.append(
             async_track_state_change_event(
                 self.hass,
@@ -213,11 +216,15 @@ class OverrideTrigger(TriggerHandler):
             _LOGGER.info("No override switch configured")
             return True  # Not an error, just optional
         
+        # Check if entity exists (warn but continue)
         state = self.hass.states.get(self.entity_id)
         if not state:
-            _LOGGER.warning("Override switch not found: %s", self.entity_id)
-            return False
+            _LOGGER.warning(
+                "Override switch not yet available: %s (will monitor once it appears)",
+                self.entity_id
+            )
         
+        # Set up listener (works even if entity doesn't exist yet)
         self._unsubscribers.append(
             async_track_state_change_event(
                 self.hass,

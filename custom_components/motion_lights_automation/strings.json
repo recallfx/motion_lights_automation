@@ -11,7 +11,7 @@
           "background_lights": "Background Lights (optional)",
           "feature_lights": "Feature Lights (optional)",
           "override_switch": "Override Switch",
-          "dark_outside": "Dark Outside (optional)"
+          "dark_inside": "Dark Inside (optional)"
         },
         "data_description": {
           "name": "A unique name for this motion lights automation",
@@ -20,7 +20,7 @@
           "background_lights": "Background/accent lights to control",
           "feature_lights": "Feature/decorative lights to control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_outside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
         }
       },
       "advanced": {
@@ -65,7 +65,7 @@
           "background_lights": "Background Lights (optional)",
           "feature_lights": "Feature Lights (optional)",
           "override_switch": "Override Switch",
-          "dark_outside": "Dark Outside (optional)"
+          "dark_inside": "Dark Inside (optional)"
         },
         "data_description": {
           "name": "A unique name for this motion lights automation",
@@ -74,7 +74,7 @@
           "background_lights": "Background/accent lights to control",
           "feature_lights": "Feature/decorative lights to control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_outside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
         }
       },
       "reconfigure_advanced": {
@@ -124,6 +124,18 @@
     "sensor": {
       "automation_state": {
         "name": "Automation State"
+      }
+    }
+  },
+  "services": {
+    "refresh_tracking": {
+      "name": "Refresh light tracking",
+      "description": "Refresh the light tracking for this motion lights integration when entities become available.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "The config entry ID of the motion lights integration to refresh."
+        }
       }
     }
   }

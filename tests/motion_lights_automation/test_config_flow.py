@@ -22,7 +22,7 @@ from homeassistant.components.motion_lights_automation.const import (
     CONF_FEATURE_LIGHT,
     CONF_CEILING_LIGHT,
     CONF_OVERRIDE_SWITCH,
-    CONF_DARK_OUTSIDE,
+    CONF_DARK_INSIDE,
     CONF_HOUSE_ACTIVE,
     CONF_MOTION_ACTIVATION,
     CONF_EXTENDED_TIMEOUT,
@@ -98,7 +98,7 @@ class TestUserFlow:
                 CONF_FEATURE_LIGHT: ["light.feature"],
                 CONF_CEILING_LIGHT: ["light.ceiling"],
                 CONF_OVERRIDE_SWITCH: "switch.override",
-                CONF_DARK_OUTSIDE: "binary_sensor.dark",
+                CONF_DARK_INSIDE: "binary_sensor.dark",
             },
         )
 

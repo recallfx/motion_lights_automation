@@ -110,10 +110,34 @@ class MotionLightsSensor(SensorEntity):
         now = dt_util.now()
         time_until_action = self._coordinator.time_until_action
 
-        # Get current brightness mode
-        context = self._coordinator._get_context()
-        is_inactive = context.get("is_inactive", False)
-        current_mode = "inactive" if is_inactive else "active"
+        # Get actual switch states
+        house_active = None
+        dark_inside = None
+        
+        if self._coordinator.house_active:
+            house_state = self._coordinator.hass.states.get(self._coordinator.house_active)
+            if house_state:
+                house_active = house_state.state == "on"
+        
+        if self._coordinator.dark_inside:
+            dark_state = self._coordinator.hass.states.get(self._coordinator.dark_inside)
+            if dark_state:
+                dark_inside = dark_state.state == "on"
+        
+        # Calculate modes based on switches
+        # Night mode: only background lights (dark_inside ON and house_active OFF)
+        only_background_lights = False
+        if dark_inside is not None and house_active is not None:
+            only_background_lights = dark_inside and not house_active
+        elif dark_inside is not None:
+            only_background_lights = dark_inside
+        
+        # Brightness: use inactive brightness when house is not active
+        use_dim_brightness = False
+        if house_active is not None:
+            use_dim_brightness = not house_active
+        elif dark_inside is not None:
+            use_dim_brightness = dark_inside
         
         # Core debugging information - what you need to understand what's happening
         attrs: dict[str, Any] = {
@@ -129,7 +153,10 @@ class MotionLightsSensor(SensorEntity):
             "motion_activation_enabled": self._coordinator.is_motion_activation_enabled,
             "brightness_active": self._coordinator.brightness_active,
             "brightness_inactive": self._coordinator.brightness_inactive,
-            "current_brightness_mode": current_mode,
+            "house_active": house_active,
+            "dark_inside": dark_inside,
+            "only_background_lights": only_background_lights,
+            "use_dim_brightness": use_dim_brightness,
             "no_motion_wait": self._coordinator.no_motion_wait_seconds,
             "extended_timeout": self._coordinator.extended_timeout,
             # Entities being controlled
@@ -139,7 +166,7 @@ class MotionLightsSensor(SensorEntity):
             "ceiling_light": self._coordinator.ceiling_light,
             "override_switch": self._coordinator.override_switch,
             "house_active_switch": self._coordinator.house_active,
-            "dark_outside_sensor": self._coordinator.dark_outside,
+            "dark_inside_sensor": self._coordinator.dark_inside,
         }
 
         return attrs

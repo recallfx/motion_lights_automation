@@ -16,7 +16,7 @@ from .const import (
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
     CONF_CEILING_LIGHT,
-    CONF_DARK_OUTSIDE,
+    CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
     CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
@@ -133,7 +133,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self.override_switch = str(override_cfg) if override_cfg else None
         
-        self.dark_outside = data.get(CONF_DARK_OUTSIDE)
+        self.dark_inside = data.get(CONF_DARK_INSIDE)
         self.house_active = data.get(CONF_HOUSE_ACTIVE)
         self.brightness_active = data.get(CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE)
         self.brightness_inactive = data.get(CONF_BRIGHTNESS_INACTIVE, DEFAULT_BRIGHTNESS_INACTIVE)
@@ -206,9 +206,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         
         _LOGGER.info(
             "Motion Lights Automation initialized: %.2fs | Lights: %d | Timers: %d | "
-            "Motion activation: %s | Override: %s | Dark outside: %s",
+            "Motion activation: %s | Override: %s | Dark inside: %s",
             elapsed, total_lights, active_timers,
-            self.motion_activation, bool(self.override_switch), bool(self.dark_outside)
+            self.motion_activation, bool(self.override_switch), bool(self.dark_inside)
         )
 
     def _set_initial_state(self) -> None:
@@ -490,43 +490,37 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _get_context(self):
         """Get context for strategies."""
-        # Determine if house is inactive (use dim brightness)
-        # Priority: house_active switch > dark_outside sensor > default to active
-        is_inactive = False
+        is_house_active = True
+        is_dark_inside = True
         
+        # Get switch states        
         if self.house_active:
-            # Priority 1: Check house_active switch
             house_state = self.hass.states.get(self.house_active)
             if house_state is None:
                 _LOGGER.warning(
-                    "house_active entity '%s' not found; falling back to dark_outside or active mode",
+                    "house_active entity '%s' not found; assuming house is active",
                     self.house_active,
                 )
             else:
-                # If house_active is OFF, house is inactive (use dim brightness)
-                is_inactive = house_state.state == "off"
-        elif self.dark_outside:
-            # Priority 2: Check dark_outside sensor
-            dark_state = self.hass.states.get(self.dark_outside)
+                is_house_active = house_state.state == "on"
+        
+        if self.dark_inside:
+            dark_state = self.hass.states.get(self.dark_inside)
             if dark_state is None:
                 _LOGGER.warning(
-                    "dark_outside entity '%s' not found; falling back to active brightness",
-                    self.dark_outside,
+                    "dark_inside entity '%s' not found; assuming dark inside",
+                    self.dark_inside,
                 )
             else:
-                # If it's dark outside, house is inactive (use dim brightness)
-                is_inactive = dark_state.state == "on"
-        # Else: Default to active mode (is_inactive = False)
+                is_dark_inside = dark_state.state == "on"
         
         motion_trigger = self.trigger_manager.get_trigger("motion")
         motion_active = motion_trigger.is_active() if motion_trigger else False
         
         # Return dict-like context that strategies can use
         return {
-            "time_of_day": "inactive" if is_inactive else "active",
-            "is_dark": is_inactive,  # Keep for backward compatibility
-            "is_night": is_inactive,  # Keep for backward compatibility
-            "is_inactive": is_inactive,
+            "is_dark_inside": is_dark_inside,
+            "is_house_active": is_house_active,
             "motion_active": motion_active,
             "current_state": self.state_machine.current_state,
             "all_lights": self.light_controller.get_all_lights(),

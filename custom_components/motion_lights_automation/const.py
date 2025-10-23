@@ -12,7 +12,7 @@ CONF_NO_MOTION_WAIT = "no_motion_wait"
 CONF_OVERRIDE_SWITCH = "override_switch"
 CONF_BRIGHTNESS_ACTIVE = "brightness_active"  # Brightness when house/room is active
 CONF_BRIGHTNESS_INACTIVE = "brightness_inactive"  # Brightness when house/room is inactive
-CONF_DARK_OUTSIDE = "dark_outside"  # Can be switch or binary_sensor
+CONF_DARK_INSIDE = "dark_inside"  # Can be switch or binary_sensor
 CONF_HOUSE_ACTIVE = "house_active"  # Switch/input_boolean for house active state
 
 # New configuration options for continuous monitoring

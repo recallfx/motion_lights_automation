@@ -41,7 +41,7 @@ The integration uses a two-step configuration process. In the first step, config
 | **Feature Lights** | No | Accent/feature lights |
 | **Override Switch** | No | Switch to temporarily disable automation |
 | **House Active Switch** | No | Switch indicating house is active (for brightness control) |
-| **Dark Outside Sensor** | No | Binary sensor indicating darkness (e.g., sun below horizon) |
+| **Dark Inside Sensor** | No | Binary sensor indicating darkness inside the room |
 
 **Note:** At least one light type (ceiling, background, or feature) must be configured.
 
@@ -155,29 +155,61 @@ The integration operates through a finite state machine with 7 distinct states. 
 
 ## Brightness System
 
+The integration uses two separate control mechanisms:
+
+### 1. Brightness Level (How Bright?)
+
 The integration determines brightness using a priority system:
 
 **Priority 1: House Active Switch** (if configured)
 - Switch ON → Use `brightness_active` (default 80%)
 - Switch OFF → Use `brightness_inactive` (default 10%)
 
-**Priority 2: Dark Outside Sensor** (if configured and no house_active)
-- Dark outside OFF (light outside) → Use `brightness_active`
-- Dark outside ON (dark outside) → Use `brightness_inactive`
+**Priority 2: Dark Inside Sensor** (if configured and no house_active)
+- Dark inside OFF → Use `brightness_active`
+- Dark inside ON → Use `brightness_inactive`
 
 **Priority 3: Default** (no switches configured)
 - Always use `brightness_active`
 
+### 2. Light Selection (Which Lights?)
+
+The integration also determines which lights to turn on:
+
+**Night Mode - Only Background Lights:**
+- Requires BOTH conditions: `dark_inside` ON **AND** `house_active` OFF
+- Only background lights turn on
+- Perfect for nighttime or windowless rooms that need minimal lighting
+
+**Day Mode - All Configured Lights:**
+- Any other combination of switch states
+- All configured lights (ceiling, background, feature) turn on
+- Normal daytime/active hours operation
+
+**If only `dark_inside` configured:**
+- Dark inside ON → Only background lights
+- Dark inside OFF → All lights
+
+**If only `house_active` configured:**
+- All lights always turn on (no night mode)
+
 ### Brightness Calculation Examples
 
-**Scenario 1: Only `dark_outside` configured**
+**Scenario 1: Only `dark_inside` configured**
 ```yaml
-dark_outside: binary_sensor.sun_below_horizon
+dark_inside: binary_sensor.room_dark
 brightness_active: 90
 brightness_inactive: 15
 ```
-- Sun above horizon → 90% brightness
-- Sun below horizon → 15% brightness
+**Brightness:**
+- Room bright → 90% brightness
+- Room dark → 15% brightness
+
+**Light Selection:**
+- Room bright → All lights
+- Room dark → Only background lights (night mode)
+
+**Use Case:** Windowless bathroom - sensor detects when room is dark
 
 **Scenario 2: Only `house_active` configured**
 ```yaml
@@ -185,19 +217,35 @@ house_active: input_boolean.house_active
 brightness_active: 80
 brightness_inactive: 10
 ```
-- House active ON → 80% brightness (any time of day)
-- House active OFF → 10% brightness (any time of day)
+**Brightness:**
+- House active ON → 80% brightness
+- House active OFF → 10% brightness
 
-**Scenario 3: Both configured (house_active wins)**
+**Light Selection:**
+- All lights always turn on (no night mode without dark_inside)
+
+**Scenario 3: Both configured (best control)**
 ```yaml
 house_active: input_boolean.house_active
-dark_outside: binary_sensor.sun_below_horizon
+dark_inside: binary_sensor.room_dark
 brightness_active: 100
 brightness_inactive: 20
 ```
-- House active ON → 100% (even if dark outside)
-- House active OFF → 20% (even if light outside)
-- `dark_outside` is ignored when `house_active` is configured
+**Brightness (house_active takes priority):**
+- House active ON → 100% (even if dark inside)
+- House active OFF → 20% (even if room bright)
+
+**Light Selection (requires BOTH for night mode):**
+- Dark inside ON + House active OFF → Only background lights (night mode)
+- Any other combination → All lights
+
+**Truth Table:**
+| dark_inside | house_active | Lights | Brightness |
+|-------------|--------------|--------|------------|
+| OFF | OFF | Background only | 20% (inactive) |
+| OFF | ON | All lights | 100% (active) |
+| ON | OFF | Background only | 20% (inactive) |
+| ON | ON | All lights | 20% (inactive) |
 
 **Scenario 4: Neither configured**
 ```yaml
@@ -205,19 +253,24 @@ brightness_active: 75
 brightness_inactive: 5
 ```
 - Always uses `brightness_active` (75%)
+- All lights always turn on
 - `brightness_inactive` is never used
 
 ### Real-World Brightness Use Case
 
-**Problem:** In winter, it gets dark at 5 PM, but you want bright lights until bedtime at 10 PM, then very dim lights for nighttime bathroom trips.
+**Problem:** You want full lighting during active hours (7 AM - 10 PM), but only dim background lights at night for bathroom trips. Your bathroom has no windows.
 
 **Solution:**
 1. Create `input_boolean.house_active` helper
-2. Configure integration with:
+2. Add ambient light sensor in the bathroom or use time-based helper
+3. Configure integration with:
    - `house_active: input_boolean.house_active`
+   - `dark_inside: binary_sensor.bathroom_dark` (or time-based)
+   - `background_lights: light.bathroom_night_light`
+   - `ceiling_lights: light.bathroom_main`
    - `brightness_active: 80`
    - `brightness_inactive: 5`
-3. Create two automations:
+4. Create two automations:
    ```yaml
    # Morning: Enable house active
    - alias: "House Active - Morning"
@@ -241,9 +294,15 @@ brightness_inactive: 5
    ```
 
 **Result:**
-- 7 AM - 10 PM: Lights at 80% when motion detected
-- 10 PM - 7 AM: Lights at 5% when motion detected
-- Dark outside doesn't matter - you control when "active hours" are
+- **7 AM - 10 PM (house active ON):** All lights at 80% when motion detected
+- **10 PM - 7 AM + Dark inside (night mode):** Only background lights at 5%
+- **10 PM - 7 AM but room bright (lights already on):** All lights at 5%
+- **Night bathroom trip:** Soft background light guides the way without waking others
+
+**Why `dark_inside` is better than sun sensor:**
+- Works for windowless rooms (bathrooms, closets, hallways)
+- Can use ambient light sensor to detect actual room darkness
+- More accurate for interior spaces
 
 ---
 
@@ -401,7 +460,10 @@ override_active: false                   # Current override switch state
 motion_activation_enabled: true          # Is motion activation enabled?
 brightness_active: 80                    # Configured active brightness
 brightness_inactive: 10                  # Configured inactive brightness
-current_brightness_mode: "active"        # Which brightness is being used
+house_active: true                       # Current house_active switch state
+dark_inside: false                       # Current dark_inside sensor state
+only_background_lights: false            # Will only background lights turn on?
+use_dim_brightness: false                # Will dim brightness be used?
 no_motion_wait: 300                      # Motion timer duration (seconds)
 extended_timeout: 1200                   # Extended timer duration (seconds)
 ```
@@ -414,7 +476,7 @@ background_light: "light.kitchen_under_cabinet"
 feature_light: null                      # null if not configured
 override_switch: "input_boolean.kitchen_override"
 house_active_switch: "input_boolean.house_active"
-dark_outside_sensor: "binary_sensor.sun_below_horizon"
+dark_inside_sensor: "binary_sensor.kitchen_dark"
 ```
 
 #### Debugging Info
@@ -454,8 +516,12 @@ entities:
     suffix: " seconds"
   - type: attribute
     entity: sensor.kitchen_lighting_automation
-    attribute: current_brightness_mode
-    name: Brightness Mode
+    attribute: only_background_lights
+    name: Night Mode
+  - type: attribute
+    entity: sensor.kitchen_lighting_automation
+    attribute: use_dim_brightness
+    name: Dim Brightness
 ```
 
 **Example 3: Trigger when entering AUTO state**
@@ -500,7 +566,7 @@ automation:
 - Motion Sensors: `binary_sensor.kitchen_motion`
 - Ceiling Lights: `light.kitchen_ceiling`
 - Background Lights: `light.kitchen_under_cabinet`
-- Dark Outside: `binary_sensor.sun_below_horizon`
+- Dark Inside: `binary_sensor.sun_below_horizon`
 - No Motion Wait: `300`
 - Brightness Active: `100` (day mode)
 - Brightness Inactive: `10` (night mode)
@@ -607,10 +673,10 @@ automation:
 
 **Check:**
 1. House active switch is configured and changing states
-2. Or dark outside sensor is configured and changing states
+2. Or dark inside sensor is configured and changing states
 3. Verify sensor states in `Developer Tools` → `States`
 
-**Debug:** Check sensor attributes for `current_brightness_mode`
+**Debug:** Check sensor attributes for `house_active`, `dark_inside`, `use_dim_brightness`, and `only_background_lights`
 
 ### Lights Flicker or Behave Erratically
 
@@ -770,9 +836,9 @@ If you're upgrading from a version that used `brightness_day` and `brightness_ni
    - Review your brightness levels (defaults changed: active 80%, inactive 10%)
 
 3. **Behavior Changes:**
-   - If you had only `dark_outside` configured: **No change in behavior**
+   - If you had only `dark_inside` configured: **No change in behavior**
    - Default brightness is now "active" (bright) instead of "day"
-   - New priority system: house_active > dark_outside > default
+   - New priority system: house_active > dark_inside > default
 
 **Example:**
 
@@ -780,22 +846,22 @@ If you're upgrading from a version that used `brightness_day` and `brightness_ni
 ```
 brightness_day: 50
 brightness_night: 5
-dark_outside: binary_sensor.sun_below_horizon
+dark_inside: binary_sensor.sun_below_horizon
 ```
 
 **Migrated to:**
 ```
 brightness_active: 50
 brightness_inactive: 5
-dark_outside: binary_sensor.sun_below_horizon
-house_active: (not set - uses dark_outside)
+dark_inside: binary_sensor.sun_below_horizon
+house_active: (not set - uses dark_inside)
 ```
 
 **Enhanced Configuration:**
 ```
 brightness_active: 80
 brightness_inactive: 10
-dark_outside: binary_sensor.sun_below_horizon
+dark_inside: binary_sensor.sun_below_horizon
 house_active: input_boolean.house_active
 ```
 
@@ -870,7 +936,7 @@ The integration has comprehensive test coverage:
 ### Module Documentation
 
 For developers and advanced users who want to extend the integration, see:
-- **[Architecture Guide](../../START_HERE.md)** - System architecture and extension points
+- **[Architecture Guide](ARCHITECTURE.md)** - System architecture and extension points
 - **Module Docstrings** - Each Python file has comprehensive inline documentation
 - **[Test Suite](../../tests/)** - 213+ tests showing usage examples and edge cases
 

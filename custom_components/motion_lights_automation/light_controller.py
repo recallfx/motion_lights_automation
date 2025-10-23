@@ -57,7 +57,7 @@ class BrightnessStrategy(ABC):
         
         Args:
             context: Dictionary containing contextual information like:
-                - is_night: bool
+                - is_dark_inside: bool
                 - ambient_light_level: int
                 - room_occupancy: int
                 - etc.
@@ -78,8 +78,9 @@ class TimeOfDayBrightnessStrategy(BrightnessStrategy):
 
     def get_brightness(self, context: dict[str, Any]) -> int:
         """Get brightness based on house activity level."""
-        is_inactive = context.get("is_inactive", False)
-        return self.inactive_brightness if is_inactive else self.active_brightness
+        is_house_active = context.get("is_house_active", True)
+
+        return self.active_brightness if is_house_active else self.inactive_brightness
 
 
 class LightSelectionStrategy(ABC):
@@ -116,18 +117,21 @@ class TimeOfDayLightSelectionStrategy(LightSelectionStrategy):
         all_lights: dict[str, list[str]],
         context: dict[str, Any],
     ) -> list[str]:
-        """Select background lights at night, all lights during day."""
-        is_night = context.get("is_night", False)
-        
-        if is_night:
-            # Night mode: only background lights
+        """Select background lights when it's dark inside, all lights during day."""
+        is_dark_inside = context.get("is_dark_inside", True)
+        is_house_active = context.get("is_house_active", True)
+
+        if not is_house_active and is_dark_inside:
+            # House inactive and dark inside: only background lights
             return all_lights.get("background", [])
-        else:
-            # Day mode: all configured lights
+        elif is_house_active and is_dark_inside:
+            # House active and dark inside: all configured lights
             selected = []
             for group in all_lights.values():
                 selected.extend(group)
             return selected
+
+        return []
 
 
 class LightController:
@@ -229,7 +233,7 @@ class LightController:
         """Turn on lights automatically based on strategies.
         
         Args:
-            context_data: Context for strategies (e.g., is_night, motion_count)
+            context_data: Context for strategies (e.g., is_dark_inside, motion_count)
             
         Returns:
             List of entity IDs that were turned on

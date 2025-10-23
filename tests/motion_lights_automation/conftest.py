@@ -29,7 +29,7 @@ from homeassistant.components.motion_lights_automation.const import (
     CONF_NO_MOTION_WAIT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_DARK_OUTSIDE,
+    CONF_DARK_INSIDE,
     CONF_HOUSE_ACTIVE,
     CONF_MOTION_ACTIVATION,
     CONF_EXTENDED_TIMEOUT,
@@ -55,7 +55,7 @@ def mock_config_data() -> dict[str, Any]:
         CONF_NO_MOTION_WAIT: DEFAULT_NO_MOTION_WAIT,
         CONF_BRIGHTNESS_ACTIVE: DEFAULT_BRIGHTNESS_ACTIVE,
         CONF_BRIGHTNESS_INACTIVE: DEFAULT_BRIGHTNESS_INACTIVE,
-        CONF_DARK_OUTSIDE: "switch.dark_outside",
+        CONF_DARK_INSIDE: "switch.dark_inside",
         CONF_HOUSE_ACTIVE: "switch.house_active",
         CONF_MOTION_ACTIVATION: DEFAULT_MOTION_ACTIVATION,
         CONF_EXTENDED_TIMEOUT: DEFAULT_EXTENDED_TIMEOUT,
@@ -95,7 +95,7 @@ def mock_motion_coordinator() -> MagicMock:
     coordinator.feature_light_entity = "light.feature"
     coordinator.ceiling_light_entity = "light.ceiling"
     coordinator.override_switch = "switch.override"
-    coordinator.dark_outside = "switch.dark_outside"
+    coordinator.dark_inside = "switch.dark_inside"
     coordinator.house_active = "switch.house_active"
     coordinator.last_motion_time = None
     coordinator.manual_reason = None

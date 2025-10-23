@@ -156,7 +156,9 @@ class TestOverrideTrigger:
         # Don't set state - entity doesn't exist
         result = await trigger.async_setup()
         
-        assert result is False
+        # Should still succeed - will monitor once entity appears
+        assert result is True
+        assert trigger.is_active() is False  # Not active since entity doesn't exist
 
     def test_override_trigger_is_active_when_on(self, hass: HomeAssistant):
         """Test is_active when override is on."""

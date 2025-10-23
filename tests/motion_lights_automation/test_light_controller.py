@@ -55,15 +55,15 @@ class TestBrightnessStrategy:
     """Test brightness strategies."""
 
     def test_time_of_day_strategy_day(self):
-        """Test TimeOfDayBrightnessStrategy for active mode."""
+        """Test TimeOfDayBrightnessStrategy for active house and light outside mode."""
         strategy = TimeOfDayBrightnessStrategy(active_brightness=60, inactive_brightness=10)
-        brightness = strategy.get_brightness({"is_inactive": False})
+        brightness = strategy.get_brightness({"is_house_active": True})
         assert brightness == 60
 
     def test_time_of_day_strategy_night(self):
         """Test TimeOfDayBrightnessStrategy for inactive mode."""
         strategy = TimeOfDayBrightnessStrategy(active_brightness=60, inactive_brightness=10)
-        brightness = strategy.get_brightness({"is_inactive": True})
+        brightness = strategy.get_brightness({"is_house_active": False})
         assert brightness == 10
 
     def test_custom_brightness_strategy(self):
@@ -96,14 +96,14 @@ class TestLightSelectionStrategy:
         assert "light.f1" in selected
 
     def test_time_of_day_selection_night(self):
-        """Test TimeOfDayLightSelectionStrategy for night."""
+        """Test TimeOfDayLightSelectionStrategy for dark inside and inactive house."""
         strategy = TimeOfDayLightSelectionStrategy()
         lights = {
             "ceiling": ["light.c1"],
             "background": ["light.bg"],
         }
-        
-        selected = strategy.select_lights(lights, {"is_night": True})
+
+        selected = strategy.select_lights(lights, {"is_house_active": False, "is_dark_inside": True})
         assert selected == ["light.bg"]
         assert "light.c1" not in selected
 

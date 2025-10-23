@@ -18,7 +18,7 @@ from .const import (
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
     CONF_CEILING_LIGHT,
-    CONF_DARK_OUTSIDE,
+    CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
     CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
@@ -101,11 +101,11 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
         schema_dict[vol.Optional(CONF_OVERRIDE_SWITCH)] = \
             selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
 
-    if data and data.get(CONF_DARK_OUTSIDE):
-        schema_dict[vol.Optional(CONF_DARK_OUTSIDE, default=data.get(CONF_DARK_OUTSIDE))] = \
+    if data and data.get(CONF_DARK_INSIDE):
+        schema_dict[vol.Optional(CONF_DARK_INSIDE, default=data.get(CONF_DARK_INSIDE))] = \
             selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "binary_sensor"]))
     else:
-        schema_dict[vol.Optional(CONF_DARK_OUTSIDE)] = \
+        schema_dict[vol.Optional(CONF_DARK_INSIDE)] = \
             selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "binary_sensor"]))
 
     if data and data.get(CONF_HOUSE_ACTIVE):
@@ -193,10 +193,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if not hass.states.get(ov):
             raise CannotConnect(f"Override switch {ov} not found")
 
-    # If dark outside entity provided, validate it exists (optional)
-    dark_outside = data.get(CONF_DARK_OUTSIDE)
-    if dark_outside and not hass.states.get(dark_outside):
-        raise CannotConnect(f"Dark outside entity {dark_outside} not found")
+    # If dark inside entity provided, validate it exists (optional)
+    dark_inside = data.get(CONF_DARK_INSIDE)
+    if dark_inside and not hass.states.get(dark_inside):
+        raise CannotConnect(f"Dark inside entity {dark_inside} not found")
 
     # If house active entity provided, validate it exists (optional)
     house_active = data.get(CONF_HOUSE_ACTIVE)

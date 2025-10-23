@@ -46,7 +46,7 @@
                 "data": {
                     "background_lights": "Background Lights (optional)",
                     "ceiling_lights": "Ceiling Lights (optional)",
-                    "dark_outside": "Dark Outside (optional)",
+                    "dark_inside": "Dark Inside (optional)",
                     "feature_lights": "Feature Lights (optional)",
                     "motion_entity": "Motion Sensor",
                     "name": "Automation Name",
@@ -55,7 +55,7 @@
                 "data_description": {
                     "background_lights": "Background/accent lights to control",
                     "ceiling_lights": "Main ceiling lights to control",
-                    "dark_outside": "If set, this determines night/day (ON=night). If not set, always day.",
+                    "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
                     "feature_lights": "Feature/decorative lights to control",
                     "motion_entity": "Binary sensor that detects motion",
                     "name": "A unique name for this motion lights automation",
@@ -100,7 +100,7 @@
                 "data": {
                     "background_lights": "Background Lights (optional)",
                     "ceiling_lights": "Ceiling Lights (optional)",
-                    "dark_outside": "Dark Outside (optional)",
+                    "dark_inside": "Dark Inside (optional)",
                     "feature_lights": "Feature Lights (optional)",
                     "motion_entity": "Motion Sensor",
                     "name": "Automation Name",
@@ -109,7 +109,7 @@
                 "data_description": {
                     "background_lights": "Background/accent lights to control",
                     "ceiling_lights": "Main ceiling lights to control",
-                    "dark_outside": "If set, this determines night/day (ON=night). If not set, always day.",
+                    "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
                     "feature_lights": "Feature/decorative lights to control",
                     "motion_entity": "Binary sensor that detects motion",
                     "name": "A unique name for this motion lights automation",
@@ -125,6 +125,18 @@
             "automation_state": {
                 "name": "Automation State"
             }
+        }
+    },
+    "services": {
+        "refresh_tracking": {
+            "description": "Refresh the light tracking for this motion lights integration when entities become available.",
+            "fields": {
+                "config_entry_id": {
+                    "description": "The config entry ID of the motion lights integration to refresh.",
+                    "name": "Config entry ID"
+                }
+            },
+            "name": "Refresh light tracking"
         }
     }
 }
