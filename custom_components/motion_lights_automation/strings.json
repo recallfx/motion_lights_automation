@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Motion Lights Advanced Setup - Basic Configuration",
+        "title": "Motion Lights Automation Setup - Basic Configuration",
         "description": "Configure the essential settings for your motion-activated lighting automation",
         "data": {
           "name": "Automation Name",
@@ -11,7 +11,7 @@
           "background_lights": "Background Lights (optional)",
           "feature_lights": "Feature Lights (optional)",
           "override_switch": "Override Switch",
-          "dark_outside": "Dark Outside (optional)"
+          "dark_inside": "Dark Inside (optional)"
         },
         "data_description": {
           "name": "A unique name for this motion lights automation",
@@ -20,11 +20,11 @@
           "background_lights": "Background/accent lights to control",
           "feature_lights": "Feature/decorative lights to control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_outside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
         }
       },
       "advanced": {
-        "title": "Motion Lights Advanced Setup - Advanced Options",
+        "title": "Motion Lights Automation Setup - Advanced Options",
         "description": "Configure advanced settings and timing options",
         "data": {
           "motion_activation": "Enable Motion Detection",
@@ -56,7 +56,7 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Motion Lights Advanced - Basic Settings",
+        "title": "Reconfigure Motion Lights Automation - Basic Settings",
         "description": "Update the basic configuration for {name}",
         "data": {
           "name": "Automation Name",
@@ -65,7 +65,7 @@
           "background_lights": "Background Lights (optional)",
           "feature_lights": "Feature Lights (optional)",
           "override_switch": "Override Switch",
-          "dark_outside": "Dark Outside (optional)"
+          "dark_inside": "Dark Inside (optional)"
         },
         "data_description": {
           "name": "A unique name for this motion lights automation",
@@ -74,11 +74,11 @@
           "background_lights": "Background/accent lights to control",
           "feature_lights": "Feature/decorative lights to control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_outside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
         }
       },
       "reconfigure_advanced": {
-        "title": "Reconfigure Motion Lights Advanced - Advanced Settings",
+        "title": "Reconfigure Motion Lights Automation - Advanced Settings",
         "description": "Update the advanced configuration for {name}",
         "data": {
           "motion_activation": "Enable Motion Detection",
@@ -124,6 +124,18 @@
     "sensor": {
       "automation_state": {
         "name": "Automation State"
+      }
+    }
+  },
+  "services": {
+    "refresh_tracking": {
+      "name": "Refresh light tracking",
+      "description": "Refresh the light tracking for this motion lights integration when entities become available.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "The config entry ID of the motion lights integration to refresh."
+        }
       }
     }
   }
