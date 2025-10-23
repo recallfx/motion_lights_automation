@@ -322,16 +322,22 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.light_controller.update_light_state(entity_id, new_state)
             
             # Check for manual intervention
+            manual_intervention_handled = False
             if not self.light_controller.is_integration_context(new_state.context):
                 is_manual = self.manual_detector.check_intervention(
                     entity_id, old_state, new_state, new_state.context
                 )
                 
                 if is_manual:
+                    old_state_before_intervention = self.state_machine.current_state
                     self._handle_manual_intervention(entity_id, old_state, new_state)
+                    # If we transitioned to MANUAL_OFF, don't process LIGHTS_ALL_OFF
+                    if (old_state_before_intervention in (STATE_AUTO, STATE_MANUAL, STATE_MOTION_MANUAL) and 
+                        self.state_machine.current_state == STATE_MANUAL_OFF):
+                        manual_intervention_handled = True
             
-            # Check if all lights are off
-            if not self.light_controller.any_lights_on():
+            # Check if all lights are off (but skip if we just handled manual intervention to MANUAL_OFF)
+            if not manual_intervention_handled and not self.light_controller.any_lights_on():
                 if self.state_machine.current_state not in (STATE_OVERRIDDEN, STATE_MANUAL_OFF):
                     self.timer_manager.cancel_all_timers()
                     self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
@@ -355,8 +361,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if current == STATE_MOTION_AUTO:
             self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
         elif current == STATE_MOTION_MANUAL:
-            # Already in manual mode during motion, log but don't transition
-            # However, restart any active timer to extend the grace period
+            # Check if user turned off all lights during motion manual state
+            if new_state.state == "off" and old_state.state == "on":
+                if not self.light_controller.any_lights_on():
+                    # All lights turned off, transition to MANUAL_OFF
+                    _LOGGER.info("User turned off all lights in MOTION_MANUAL state - transitioning to MANUAL_OFF")
+                    self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+                    return  # Don't continue processing
+            # Already in manual mode during motion, log but don't restart timers
             _LOGGER.debug("Manual change during MOTION_MANUAL state - already tracking manually, no timer to restart")
         elif current == STATE_MANUAL:
             # User is actively adjusting lights in MANUAL state

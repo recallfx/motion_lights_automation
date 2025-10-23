@@ -119,6 +119,7 @@ class MotionLightsStateMachine:
         # Manual OFF intervention (lights turned off during AUTO or MANUAL)
         self._add_transition(STATE_AUTO, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF)
         self._add_transition(STATE_MANUAL, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF)
+        self._add_transition(STATE_MOTION_MANUAL, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF)
         
         # Timer expired transitions
         self._add_transition(STATE_AUTO, StateTransitionEvent.TIMER_EXPIRED, STATE_IDLE)
