@@ -260,11 +260,25 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Motion ON")
 
             if not self.motion_activation:
-                # When motion_activation is disabled, motion doesn't turn on lights.
-                # However, if lights are already on (manually), restart the timer.
-                if self.light_controller.any_lights_on():
+                # When motion_activation is disabled, motion doesn't turn on lights automatically.
+                # However, if lights are already on (manually), restart the timer to prevent
+                # premature shutoff while the room is actively being used.
+                current = self.state_machine.current_state
+                if current in (STATE_MANUAL, STATE_AUTO):
                     _LOGGER.debug(
-                        "Motion detected with motion_activation=False; restarting timer"
+                        "Motion detected with motion_activation=False in state %s; restarting extended timer",
+                        current,
+                    )
+                    self.timer_manager.cancel_timer("extended")
+                    self.timer_manager.start_timer(
+                        "extended",
+                        TimerType.EXTENDED,
+                        self._async_timer_expired,
+                    )
+                elif current == STATE_MANUAL_OFF:
+                    # User manually turned off lights but motion detected - restart timer
+                    _LOGGER.debug(
+                        "Motion detected with motion_activation=False in MANUAL_OFF state; restarting extended timer"
                     )
                     self.timer_manager.cancel_timer("extended")
                     self.timer_manager.start_timer(

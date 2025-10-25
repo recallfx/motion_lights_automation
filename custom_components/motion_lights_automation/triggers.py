@@ -148,10 +148,12 @@ class MotionTrigger(TriggerHandler):
 
     @callback
     def _async_motion_changed(self, event: Event) -> None:
-        """Handle motion sensor state change."""
-        if not self.enabled:
-            return
+        """Handle motion sensor state change.
 
+        Note: We always fire callbacks regardless of enabled state.
+        This allows motion to reset timers even when motion_activation is disabled.
+        The coordinator decides how to handle these callbacks based on motion_activation.
+        """
         new_state = event.data.get("new_state")
         if not new_state:
             return
@@ -166,10 +168,11 @@ class MotionTrigger(TriggerHandler):
                 self._fire_deactivated()
 
     def is_active(self) -> bool:
-        """Check if any motion sensor is currently active."""
-        if not self.enabled:
-            return False
+        """Check if any motion sensor is currently active.
 
+        Note: Returns true if motion is detected, regardless of enabled state.
+        This allows proper timer resets even when motion_activation is disabled.
+        """
         return any(
             (state := self.hass.states.get(eid)) and state.state == "on"
             for eid in self.entity_ids

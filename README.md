@@ -361,11 +361,12 @@ The integration uses a clean, modular architecture:
 
 ### Testing
 
-Comprehensive test coverage with **213+ tests**:
+Comprehensive test coverage with **217+ tests**:
 - State machine transitions: 60+ tests
 - Configuration flow: 45+ tests
 - Light controller: 35+ tests
 - Coordinator: 40+ tests
+- Motion activation disabled: 4 tests
 - Edge cases and error handling
 
 Run tests:
@@ -406,28 +407,23 @@ pytest tests/
 
 ---
 
-## 📝 Changelog
+## Changelog
 
-### Version 4.0.0 (Current)
-- ✅ Modular architecture with 5 reusable components
-- ✅ Active/Inactive brightness system (replaces day/night)
-- ✅ House active switch support
-- ✅ Priority brightness logic
-- ✅ Enhanced state machine
-- ✅ 213+ tests passing
-- ✅ Production-ready quality
+### 4.0.1
 
-### Version 3.1.0
-- Multi-entity support in config flow
-- Improved dark-outside handling
-- Updated defaults
-- Refresh service improvements
+Motion sensors now reset the extended timer even when motion_activation is disabled. Previously, lights would turn off after the extended timeout regardless of ongoing motion detection. The fix ensures the MotionTrigger fires callbacks unconditionally, letting the coordinator decide how to handle them based on current state and settings.
 
-### Version 2.0.0
-- Unified coordinator architecture
-- Enhanced motion activation control
-- Improved manual detection
-- Comprehensive testing
+### 4.0.0
+
+Brightness control changed from day/night modes to an active/inactive system with priority-based selection. The coordinator delegates to five specialized modules instead of handling logic directly. Each module (state machine, timer manager, trigger manager, light controller, manual detector) can be extended through strategy patterns or base class inheritance.
+
+### 3.1.0
+
+Config flow fields accept multiple entities. The dark outside sensor connects to the brightness priority system. Default timeouts changed to better handle typical room occupancy patterns.
+
+### 2.0.0
+
+Coordinator handles all component initialization and event wiring. Manual intervention detection separates user actions from automation-triggered changes using Home Assistant context IDs.
 
 ---
 
@@ -457,4 +453,4 @@ If this project helps you, please give it a ⭐️!
 
 ---
 
-**Last Updated:** October 23, 2025
+**Last Updated:** October 25, 2025
