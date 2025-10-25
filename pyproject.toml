@@ -1,8 +1,4 @@
 [project]
-name = "github-custom-component-tutorial"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "homeassistant==2024.12.5",
