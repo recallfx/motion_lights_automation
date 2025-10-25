@@ -147,7 +147,7 @@ The integration operates through a finite state machine with 7 distinct states. 
 
 **Lights Stay As-Is:**
 - MOTION_MANUAL: Respects your manual settings
-- MANUAL: Respects your manual settings  
+- MANUAL: Respects your manual settings
 - MANUAL_OFF: Keeps lights off until timer expires
 - OVERRIDDEN: No automation control
 
@@ -281,7 +281,7 @@ brightness_inactive: 5
        - service: input_boolean.turn_on
          target:
            entity_id: input_boolean.house_active
-   
+
    # Bedtime: Disable house active
    - alias: "House Active - Bedtime"
      trigger:
@@ -472,7 +472,7 @@ extended_timeout: 1200                   # Extended timer duration (seconds)
 ```yaml
 motion_entity: "binary_sensor.kitchen_motion"
 ceiling_light: "light.kitchen_ceiling"
-background_light: "light.kitchen_under_cabinet"  
+background_light: "light.kitchen_under_cabinet"
 feature_light: null                      # null if not configured
 override_switch: "input_boolean.kitchen_override"
 house_active_switch: "input_boolean.house_active"
@@ -719,16 +719,16 @@ The integration uses a strategy pattern for brightness calculation. You can exte
 ```python
 class LuxBasedBrightnessStrategy(BrightnessStrategy):
     """Adjust brightness based on ambient light sensor."""
-    
+
     def __init__(self, hass: HomeAssistant, lux_sensor: str):
         self.hass = hass
         self.lux_sensor = lux_sensor
-    
+
     def get_brightness(self, context: dict[str, Any]) -> int:
         state = self.hass.states.get(self.lux_sensor)
         if not state:
             return 80  # Default
-        
+
         lux = float(state.state)
         if lux < 10:
             return 100  # Very dark
@@ -765,7 +765,7 @@ automation:
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.kitchen_override
-  
+
   - alias: "Enable Kitchen Motion in Morning"
     trigger:
       - platform: time
@@ -1008,5 +1008,4 @@ logger:
 
 ---
 
-**Last Updated:** October 23, 2025  
-
+**Last Updated:** October 23, 2025

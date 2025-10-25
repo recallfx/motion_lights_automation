@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-from typing import Any
 from datetime import datetime
-
-import pytest
 
 
 class TestCoordinatorBasics:
@@ -53,7 +49,7 @@ class TestCoordinatorBasics:
     def test_coordinator_motion_state_values(self) -> None:
         """Test motion state values."""
         valid_motion_states = ["on", "off"]
-        
+
         for state in valid_motion_states:
             assert state in ["on", "off"]
 

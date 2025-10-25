@@ -29,7 +29,9 @@ class MotionLightsAutomationRigConfigFlow(ConfigFlow, domain=DOMAIN):
                     user_input[CONF_NAME] = DEFAULT_NAME
 
                 # Set unique ID based on name to prevent duplicates
-                await self.async_set_unique_id(user_input[CONF_NAME].lower().replace(" ", "_"))
+                await self.async_set_unique_id(
+                    user_input[CONF_NAME].lower().replace(" ", "_")
+                )
                 self._abort_if_unique_id_configured()
 
                 if not errors:

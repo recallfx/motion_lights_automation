@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-from typing import Any
-from datetime import datetime
-
-import pytest
-
 
 class TestMotionLightsSensorBasics:
     """Test motion lights sensor basics."""

@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-from typing import Any
-
-import pytest
-
 
 class TestConfigFlowBasics:
     """Test config flow basics without Home Assistant."""

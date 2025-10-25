@@ -7,9 +7,9 @@ to be used based on preferences or requirements.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
-import logging
 
 from homeassistant.core import Context
 
@@ -18,11 +18,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class ManualInterventionStrategy(ABC):
     """Abstract base class for manual intervention detection.
-    
+
     Implement this interface to create custom detection strategies for
     determining when a user has manually controlled the lights vs. when
     the automation did it.
-    
+
     Examples:
     - Brightness threshold detection (current default)
     - Time-window detection (changes within X seconds of automation)
@@ -39,13 +39,13 @@ class ManualInterventionStrategy(ABC):
         context: Context | None,
     ) -> tuple[bool, str | None]:
         """Determine if a state change represents manual intervention.
-        
+
         Args:
             entity_id: Entity ID that changed
             old_state: Previous state
             new_state: New state
             context: Context of the state change
-        
+
         Returns:
             Tuple of (is_manual, reason_string)
             - is_manual: True if this is manual intervention
@@ -56,7 +56,7 @@ class ManualInterventionStrategy(ABC):
 
 class BrightnessThresholdStrategy(ManualInterventionStrategy):
     """Detect manual intervention based on brightness changes.
-    
+
     This is the default strategy. It considers a change to be manual if:
     1. The light is turned on/off externally
     2. The brightness changes by more than a threshold percentage
@@ -68,7 +68,7 @@ class BrightnessThresholdStrategy(ManualInterventionStrategy):
         integration_contexts: set[str] | None = None,
     ):
         """Initialize the strategy.
-        
+
         Args:
             brightness_threshold_pct: Minimum brightness change to consider manual
             integration_contexts: Set of context IDs originating from integration
@@ -87,36 +87,38 @@ class BrightnessThresholdStrategy(ManualInterventionStrategy):
         # Check if this change originated from our integration
         if self._is_integration_context(context):
             return False, None
-        
+
         # Get states
         old_state_str = old_state.state if old_state else "unknown"
         new_state_str = new_state.state if new_state else "unknown"
-        
+
         # Check for on/off state change
         if old_state_str != new_state_str:
             if new_state_str == "on" and old_state_str == "off":
                 return True, f"light turned on manually: {entity_id}"
             elif new_state_str == "off" and old_state_str == "on":
                 return True, f"light turned off manually: {entity_id}"
-        
+
         # Check for significant brightness change
         if new_state_str == "on" and old_state_str == "on":
             old_brightness = self._get_brightness_pct(old_state)
             new_brightness = self._get_brightness_pct(new_state)
             brightness_diff = abs(new_brightness - old_brightness)
-            
+
             if brightness_diff >= self.brightness_threshold_pct:
-                return True, f"brightness changed manually: {entity_id} ({old_brightness}% → {new_brightness}%)"
-        
+                return (
+                    True,
+                    f"brightness changed manually: {entity_id} ({old_brightness}% → {new_brightness}%)",
+                )
+
         return False, None
 
     def _is_integration_context(self, context: Context | None) -> bool:
         """Check if context originated from integration."""
         if not context:
             return False
-        return (
-            context.id in self.integration_contexts
-            or (context.parent_id and context.parent_id in self.integration_contexts)
+        return context.id in self.integration_contexts or (
+            context.parent_id and context.parent_id in self.integration_contexts
         )
 
     def _get_brightness_pct(self, state: Any) -> int:
@@ -129,7 +131,7 @@ class BrightnessThresholdStrategy(ManualInterventionStrategy):
 
 class TimeWindowStrategy(ManualInterventionStrategy):
     """Detect manual intervention based on time windows.
-    
+
     This strategy considers changes to be non-manual if they occur within
     a short time window after an automation action.
     """
@@ -140,7 +142,7 @@ class TimeWindowStrategy(ManualInterventionStrategy):
         integration_contexts: set[str] | None = None,
     ):
         """Initialize the strategy.
-        
+
         Args:
             window_seconds: Time window to ignore changes after automation
             integration_contexts: Set of context IDs from integration
@@ -152,6 +154,7 @@ class TimeWindowStrategy(ManualInterventionStrategy):
     def mark_automation_action(self) -> None:
         """Mark that an automation action just occurred."""
         import time
+
         self._last_automation_time = time.monotonic()
 
     def is_manual_intervention(
@@ -168,9 +171,10 @@ class TimeWindowStrategy(ManualInterventionStrategy):
             or (context.parent_id and context.parent_id in self.integration_contexts)
         ):
             return False, None
-        
+
         # Check if within time window
         import time
+
         time_since_automation = time.monotonic() - self._last_automation_time
         if time_since_automation < self.window_seconds:
             _LOGGER.debug(
@@ -178,21 +182,21 @@ class TimeWindowStrategy(ManualInterventionStrategy):
                 time_since_automation,
             )
             return False, None
-        
+
         # Inside window - check for significant change
         old_state_str = old_state.state if old_state else "unknown"
         new_state_str = new_state.state if new_state else "unknown"
-        
+
         if old_state_str != new_state_str:
             # We are outside the automation window here, so this is manual
             return True, f"light state changed outside automation window: {entity_id}"
-        
+
         return False, None
 
 
 class CombinedStrategy(ManualInterventionStrategy):
     """Combine multiple strategies with AND or OR logic.
-    
+
     This allows creating complex detection logic by combining simpler strategies.
     """
 
@@ -202,7 +206,7 @@ class CombinedStrategy(ManualInterventionStrategy):
         logic: str = "OR",
     ):
         """Initialize combined strategy.
-        
+
         Args:
             strategies: List of strategies to combine
             logic: "AND" or "OR" - how to combine results
@@ -222,7 +226,7 @@ class CombinedStrategy(ManualInterventionStrategy):
         """Detect manual intervention using combined strategies."""
         results = []
         reasons = []
-        
+
         for strategy in self.strategies:
             is_manual, reason = strategy.is_manual_intervention(
                 entity_id, old_state, new_state, context
@@ -230,27 +234,27 @@ class CombinedStrategy(ManualInterventionStrategy):
             results.append(is_manual)
             if reason:
                 reasons.append(reason)
-        
+
         if self.logic == "AND":
             is_manual = all(results)
         else:  # OR
             is_manual = any(results)
-        
+
         reason = "; ".join(reasons) if is_manual and reasons else None
         return is_manual, reason
 
 
 class ManualInterventionDetector:
     """Manages manual intervention detection with pluggable strategies.
-    
+
     This class provides a clean interface for detecting manual intervention
     that can work with different detection strategies.
-    
+
     To use a custom strategy:
     1. Create a class inheriting from ManualInterventionStrategy
     2. Implement is_manual_intervention() method
     3. Set it with set_strategy()
-    
+
     Example custom strategies:
     - User-aware detection (different rules per user)
     - Room-aware detection (different rules per room)
@@ -260,7 +264,7 @@ class ManualInterventionDetector:
 
     def __init__(self, strategy: ManualInterventionStrategy | None = None):
         """Initialize the detector.
-        
+
         Args:
             strategy: Detection strategy to use (default: BrightnessThresholdStrategy)
         """
@@ -270,7 +274,9 @@ class ManualInterventionDetector:
     def set_strategy(self, strategy: ManualInterventionStrategy) -> None:
         """Set the detection strategy."""
         self._strategy = strategy
-        _LOGGER.info("Updated manual intervention strategy to %s", type(strategy).__name__)
+        _LOGGER.info(
+            "Updated manual intervention strategy to %s", type(strategy).__name__
+        )
 
     def check_intervention(
         self,
@@ -280,18 +286,18 @@ class ManualInterventionDetector:
         context: Context | None,
     ) -> bool:
         """Check if a state change represents manual intervention.
-        
+
         Returns:
             True if manual intervention detected
         """
         is_manual, reason = self._strategy.is_manual_intervention(
             entity_id, old_state, new_state, context
         )
-        
+
         if is_manual:
             self._last_manual_reason = reason
             _LOGGER.info("Manual intervention detected: %s", reason)
-        
+
         return is_manual
 
     def get_last_reason(self) -> str | None:

@@ -75,14 +75,14 @@ class MotionLightsSensor(SensorEntity):
         self._coordinator = coordinator
         self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}_{entity_description.key}"
-        
+
         # Get name from config entry title or data
         name = config_entry.title
         if not name and CONF_NAME in config_entry.data:
             name = config_entry.data[CONF_NAME]
         if not name:
             name = "Motion Lights Automation"
-        
+
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": name,
@@ -113,17 +113,21 @@ class MotionLightsSensor(SensorEntity):
         # Get actual switch states
         house_active = None
         dark_inside = None
-        
+
         if self._coordinator.house_active:
-            house_state = self._coordinator.hass.states.get(self._coordinator.house_active)
+            house_state = self._coordinator.hass.states.get(
+                self._coordinator.house_active
+            )
             if house_state:
                 house_active = house_state.state == "on"
-        
+
         if self._coordinator.dark_inside:
-            dark_state = self._coordinator.hass.states.get(self._coordinator.dark_inside)
+            dark_state = self._coordinator.hass.states.get(
+                self._coordinator.dark_inside
+            )
             if dark_state:
                 dark_inside = dark_state.state == "on"
-        
+
         # Calculate modes based on switches
         # Night mode: only background lights (dark_inside ON and house_active OFF)
         only_background_lights = False
@@ -131,14 +135,14 @@ class MotionLightsSensor(SensorEntity):
             only_background_lights = dark_inside and not house_active
         elif dark_inside is not None:
             only_background_lights = dark_inside
-        
+
         # Brightness: use inactive brightness when house is not active
         use_dim_brightness = False
         if house_active is not None:
             use_dim_brightness = not house_active
         elif dark_inside is not None:
             use_dim_brightness = dark_inside
-        
+
         # Core debugging information - what you need to understand what's happening
         attrs: dict[str, Any] = {
             # Current Status (what's happening right now)
@@ -146,9 +150,11 @@ class MotionLightsSensor(SensorEntity):
             # Timer Status (when will something happen next)
             "timer_active": time_until_action is not None,
             "time_until_action": time_until_action,
-            "next_action_time": (now + timedelta(seconds=time_until_action)).isoformat()
-            if time_until_action
-            else None,
+            "next_action_time": (
+                (now + timedelta(seconds=time_until_action)).isoformat()
+                if time_until_action
+                else None
+            ),
             # Configuration (is motion activation on/off, what brightness levels)
             "motion_activation_enabled": self._coordinator.is_motion_activation_enabled,
             "brightness_active": self._coordinator.brightness_active,

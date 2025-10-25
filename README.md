@@ -1,9 +1,5 @@
 # Motion Lights Automation
 
-[![GitHub release](https://img.shields.io/github/release/recallfx/motion_lights_automation.svg)](https://github.com/recallfx/motion_lights_automation/releases)
-[![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/recallfx/motion_lights_automation)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 **Intelligent motion-activated lighting with state machine control for Home Assistant**
 
 Motion Lights Automation is a Home Assistant integration that provides sophisticated automatic lighting control based on motion detection, with support for manual interventions, override switches, and flexible brightness modes.

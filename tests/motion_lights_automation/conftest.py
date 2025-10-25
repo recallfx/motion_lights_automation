@@ -2,42 +2,36 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, AsyncMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_NAME, Platform
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_registry import EntityRegistry
+from homeassistant.const import CONF_NAME, Platform
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceRegistry
+from homeassistant.helpers.entity_registry import EntityRegistry
 
-from homeassistant.const import Platform
-
-# Import via sys.path for custom component
-
-
-
-from homeassistant.components.motion_lights_automation.const import (
-    DOMAIN,
-    CONF_MOTION_ENTITY,
+# Import from custom component instead of homeassistant.components
+from custom_components.motion_lights_automation.const import (
     CONF_BACKGROUND_LIGHT,
-    CONF_FEATURE_LIGHT,
-    CONF_CEILING_LIGHT,
-    CONF_OVERRIDE_SWITCH,
-    CONF_NO_MOTION_WAIT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
+    CONF_CEILING_LIGHT,
     CONF_DARK_INSIDE,
+    CONF_EXTENDED_TIMEOUT,
+    CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
     CONF_MOTION_ACTIVATION,
-    CONF_EXTENDED_TIMEOUT,
-    DEFAULT_NO_MOTION_WAIT,
+    CONF_MOTION_ENTITY,
+    CONF_NO_MOTION_WAIT,
+    CONF_OVERRIDE_SWITCH,
     DEFAULT_BRIGHTNESS_ACTIVE,
     DEFAULT_BRIGHTNESS_INACTIVE,
-    DEFAULT_MOTION_ACTIVATION,
     DEFAULT_EXTENDED_TIMEOUT,
+    DEFAULT_MOTION_ACTIVATION,
+    DEFAULT_NO_MOTION_WAIT,
+    DOMAIN,
     STATE_IDLE,
 )
 
@@ -99,12 +93,12 @@ def mock_motion_coordinator() -> MagicMock:
     coordinator.house_active = "switch.house_active"
     coordinator.last_motion_time = None
     coordinator.manual_reason = None
-    
+
     # Add async methods
     coordinator.async_add_listener = MagicMock()
     coordinator.async_remove_listener = MagicMock()
     coordinator.async_refresh_light_tracking = AsyncMock()
-    
+
     return coordinator
 
 
@@ -116,15 +110,15 @@ async def init_integration(
 ) -> ConfigEntry:
     """Initialize the integration."""
     mock_config_entry.add_to_hass(hass)
-    
-    # Patch the coordinator creation
+
+    # Patch the coordinator creation - use custom_components path
     with patch(
-        "homeassistant.components.motion_lights_automation.MotionLightsCoordinator",
+        "custom_components.motion_lights_automation.MotionLightsCoordinator",
         return_value=mock_motion_coordinator,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    
+
     return mock_config_entry
 
 
@@ -132,6 +126,7 @@ async def init_integration(
 def entity_registry(hass: HomeAssistant) -> EntityRegistry:
     """Get the entity registry."""
     from homeassistant.helpers import entity_registry
+
     return entity_registry.async_get(hass)
 
 
@@ -139,6 +134,7 @@ def entity_registry(hass: HomeAssistant) -> EntityRegistry:
 def device_registry(hass: HomeAssistant) -> DeviceRegistry:
     """Get the device registry."""
     from homeassistant.helpers import device_registry
+
     return device_registry.async_get(hass)
 
 

@@ -2,19 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
 
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-
-
-
-from homeassistant.components.motion_lights_automation.const import DOMAIN, STATE_IDLE
 
 
 class TestSensorSetup:

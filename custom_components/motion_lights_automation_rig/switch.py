@@ -102,36 +102,36 @@ class MotionToggleSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn motion on."""
         self._is_on = True
-        
+
         # Store motion state in hass.data so the sensor can access it
         motion_state_key = f"{DOMAIN}_motion_{self._config_entry_id}"
         self.hass.data.setdefault(DOMAIN, {})[motion_state_key] = True
-        
+
         # Notify any listeners that the state changed
         async_dispatcher_send(
             self.hass,
             f"{DOMAIN}_motion_state_changed_{self._config_entry_id}",
             True,
         )
-        
+
         _LOGGER.debug("Motion activated via toggle")
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn motion off."""
         self._is_on = False
-        
+
         # Store motion state in hass.data so the sensor can access it
         motion_state_key = f"{DOMAIN}_motion_{self._config_entry_id}"
         self.hass.data.setdefault(DOMAIN, {})[motion_state_key] = False
-        
+
         # Notify any listeners that the state changed
         async_dispatcher_send(
             self.hass,
             f"{DOMAIN}_motion_state_changed_{self._config_entry_id}",
             False,
         )
-        
+
         _LOGGER.debug("Motion deactivated via toggle")
         self.async_write_ha_state()
 

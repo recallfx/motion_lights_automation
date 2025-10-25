@@ -104,11 +104,11 @@ light_controller.set_selection_strategy(SceneSelectionStrategy())
 class DoorTrigger(TriggerHandler):
     def __init__(self, hass, entity_id):
         self.entity_id = entity_id
-        
+
     async def setup(self):
         # Listen to door entity state changes
         pass
-        
+
     def is_active(self):
         return self.hass.states.get(self.entity_id).state == "on"
 
@@ -193,7 +193,7 @@ pytest --cov=custom_components/motion_lights_automation tests/
 
 **Test Coverage:** 213+ tests across all components
 - State machine: 60+ tests
-- Configuration flow: 45+ tests  
+- Configuration flow: 45+ tests
 - Light controller: 35+ tests
 - Coordinator: 40+ tests
 - Edge cases and error handling

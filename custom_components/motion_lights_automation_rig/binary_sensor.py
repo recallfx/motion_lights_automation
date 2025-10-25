@@ -75,7 +75,7 @@ class MotionSensor(BinarySensorEntity):
     async def async_added_to_hass(self) -> None:
         """Register dispatcher to listen for motion state changes."""
         await super().async_added_to_hass()
-        
+
         # Listen for state changes from the switch
         self.async_on_remove(
             async_dispatcher_connect(

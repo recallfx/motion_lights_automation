@@ -6,9 +6,9 @@ with new trigger types (door sensors, presence detection, schedules, etc.)
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable
-import logging
 
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -18,11 +18,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class TriggerHandler(ABC):
     """Abstract base class for trigger handlers.
-    
+
     Implement this interface to create new trigger types for the automation.
     Each trigger handler monitors specific entities/events and calls callbacks
     when trigger conditions are met.
-    
+
     Examples of trigger handlers:
     - MotionTrigger (motion sensors)
     - DoorTrigger (door sensors)
@@ -33,7 +33,7 @@ class TriggerHandler(ABC):
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]):
         """Initialize the trigger handler.
-        
+
         Args:
             hass: HomeAssistant instance
             config: Configuration for this trigger
@@ -49,9 +49,9 @@ class TriggerHandler(ABC):
     @abstractmethod
     async def async_setup(self) -> bool:
         """Set up the trigger handler.
-        
+
         This should set up event listeners and any required monitoring.
-        
+
         Returns:
             True if setup successful, False otherwise
         """
@@ -60,7 +60,7 @@ class TriggerHandler(ABC):
     @abstractmethod
     def is_active(self) -> bool:
         """Check if the trigger is currently active.
-        
+
         Returns:
             True if trigger is active, False otherwise
         """
@@ -76,17 +76,17 @@ class TriggerHandler(ABC):
 
     def _fire_activated(self) -> None:
         """Fire all activated callbacks."""
-        for callback in self._callbacks["activated"]:
+        for cb in self._callbacks["activated"]:
             try:
-                callback()
+                cb()
             except Exception as err:
                 _LOGGER.error("Error in trigger activated callback: %s", err)
 
     def _fire_deactivated(self) -> None:
         """Fire all deactivated callbacks."""
-        for callback in self._callbacks["deactivated"]:
+        for cb in self._callbacks["deactivated"]:
             try:
-                callback()
+                cb()
             except Exception as err:
                 _LOGGER.error("Error in trigger deactivated callback: %s", err)
 
@@ -104,14 +104,14 @@ class TriggerHandler(ABC):
 
 class MotionTrigger(TriggerHandler):
     """Trigger handler for motion sensors.
-    
+
     Monitors one or more motion sensors and fires callbacks when motion
     is detected or clears.
     """
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]):
         """Initialize motion trigger.
-        
+
         Config should contain:
             - entity_ids: List of motion sensor entity IDs
             - enabled: Whether motion detection is enabled (default: True)
@@ -125,15 +125,15 @@ class MotionTrigger(TriggerHandler):
         if not self.entity_ids:
             _LOGGER.warning("No motion sensors configured")
             return False
-        
+
         # Verify entities exist (warn but continue)
         missing = [eid for eid in self.entity_ids if not self.hass.states.get(eid)]
         if missing:
             _LOGGER.warning(
                 "Motion sensors not yet available: %s (will monitor once they appear)",
-                missing
+                missing,
             )
-        
+
         # Set up state change tracking (works even if entities don't exist yet)
         self._unsubscribers.append(
             async_track_state_change_event(
@@ -142,7 +142,7 @@ class MotionTrigger(TriggerHandler):
                 self._async_motion_changed,
             )
         )
-        
+
         _LOGGER.info("Motion trigger set up for %d sensors", len(self.entity_ids))
         return True
 
@@ -151,11 +151,11 @@ class MotionTrigger(TriggerHandler):
         """Handle motion sensor state change."""
         if not self.enabled:
             return
-        
+
         new_state = event.data.get("new_state")
         if not new_state:
             return
-        
+
         if new_state.state == "on":
             _LOGGER.debug("Motion detected on %s", new_state.entity_id)
             self._fire_activated()
@@ -169,7 +169,7 @@ class MotionTrigger(TriggerHandler):
         """Check if any motion sensor is currently active."""
         if not self.enabled:
             return False
-        
+
         return any(
             (state := self.hass.states.get(eid)) and state.state == "on"
             for eid in self.entity_ids
@@ -189,7 +189,11 @@ class MotionTrigger(TriggerHandler):
             "entity_ids": self.entity_ids,
             "is_active": self.is_active(),
             "sensor_states": {
-                eid: self.hass.states.get(eid).state if self.hass.states.get(eid) else "unknown"
+                eid: (
+                    self.hass.states.get(eid).state
+                    if self.hass.states.get(eid)
+                    else "unknown"
+                )
                 for eid in self.entity_ids
             },
         }
@@ -197,13 +201,13 @@ class MotionTrigger(TriggerHandler):
 
 class OverrideTrigger(TriggerHandler):
     """Trigger handler for override switch.
-    
+
     Monitors an override switch that can disable all automation.
     """
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]):
         """Initialize override trigger.
-        
+
         Config should contain:
             - entity_id: Override switch entity ID
         """
@@ -215,15 +219,15 @@ class OverrideTrigger(TriggerHandler):
         if not self.entity_id:
             _LOGGER.info("No override switch configured")
             return True  # Not an error, just optional
-        
+
         # Check if entity exists (warn but continue)
         state = self.hass.states.get(self.entity_id)
         if not state:
             _LOGGER.warning(
                 "Override switch not yet available: %s (will monitor once it appears)",
-                self.entity_id
+                self.entity_id,
             )
-        
+
         # Set up listener (works even if entity doesn't exist yet)
         self._unsubscribers.append(
             async_track_state_change_event(
@@ -232,7 +236,7 @@ class OverrideTrigger(TriggerHandler):
                 self._async_override_changed,
             )
         )
-        
+
         _LOGGER.info("Override trigger set up for %s", self.entity_id)
         return True
 
@@ -241,10 +245,10 @@ class OverrideTrigger(TriggerHandler):
         """Handle override switch state change."""
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
-        
+
         if not new_state or not old_state:
             return
-        
+
         if new_state.state == "on" and old_state.state == "off":
             _LOGGER.info("Override activated")
             self._fire_activated()
@@ -270,15 +274,15 @@ class OverrideTrigger(TriggerHandler):
 
 class TriggerManager:
     """Manages multiple trigger handlers.
-    
+
     This class coordinates multiple trigger handlers and provides a unified
     interface for the automation coordinator.
-    
+
     To add a new trigger type:
     1. Create a class inheriting from TriggerHandler
     2. Implement required methods (async_setup, is_active, get_info)
     3. Add it to the manager with add_trigger()
-    
+
     Example triggers you could add:
     - Door sensors (trigger on door open)
     - Presence detection (room occupancy)
@@ -294,7 +298,7 @@ class TriggerManager:
 
     def add_trigger(self, name: str, trigger: TriggerHandler) -> None:
         """Add a trigger handler.
-        
+
         Args:
             name: Unique name for this trigger
             trigger: TriggerHandler instance
@@ -302,13 +306,13 @@ class TriggerManager:
         if name in self._triggers:
             _LOGGER.warning("Replacing existing trigger '%s'", name)
             self._triggers[name].cleanup()
-        
+
         self._triggers[name] = trigger
         _LOGGER.debug("Added trigger '%s' (%s)", name, type(trigger).__name__)
 
     async def async_setup_all(self) -> bool:
         """Set up all triggers.
-        
+
         Returns:
             True if all triggers set up successfully
         """
@@ -322,7 +326,7 @@ class TriggerManager:
             except Exception as err:
                 _LOGGER.error("Error setting up trigger '%s': %s", name, err)
                 success = False
-        
+
         return success
 
     def get_trigger(self, name: str) -> TriggerHandler | None:
@@ -345,7 +349,6 @@ class TriggerManager:
         return {
             "total_triggers": len(self._triggers),
             "triggers": {
-                name: trigger.get_info()
-                for name, trigger in self._triggers.items()
+                name: trigger.get_info() for name, trigger in self._triggers.items()
             },
         }

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock
-from datetime import datetime, timedelta
+from datetime import datetime
+
 
 # Using local state machine implementation for testing
 # This is a standalone unit test that doesn't depend on Home Assistant imports
@@ -125,10 +124,10 @@ class TestStateMachineBasics:
     def test_listener_registration(self) -> None:
         """Test listener callback registration."""
         listeners = []
-        
+
         def callback1():
             pass
-        
+
         def callback2():
             pass
 
@@ -143,9 +142,9 @@ class TestStateMachineBasics:
         """Test unique ID generation."""
         entry_id = "test_entry_abc123"
         entity_key = "lighting_automation"
-        
+
         unique_id = f"{entry_id}_{entity_key}"
-        
+
         assert unique_id == "test_entry_abc123_lighting_automation"
         assert "test_entry_abc123" in unique_id
 
@@ -192,8 +191,16 @@ class TestSensorAttributes:
 
     def test_current_state_attribute(self) -> None:
         """Test current state attribute."""
-        states = ["idle", "motion-auto", "motion-manual", "auto", "manual", "manual-off", "overridden"]
-        
+        states = [
+            "idle",
+            "motion-auto",
+            "motion-manual",
+            "auto",
+            "manual",
+            "manual-off",
+            "overridden",
+        ]
+
         for state in states:
             assert isinstance(state, str)
             assert len(state) > 0

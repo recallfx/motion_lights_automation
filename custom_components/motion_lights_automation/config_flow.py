@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
@@ -60,9 +59,7 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
 
     # For optional single-entity selectors, only set default if data exists AND has a value
     schema_dict = {
-        vol.Optional(
-            CONF_NAME, default=(data.get(CONF_NAME) if data else None)
-        ): str,
+        vol.Optional(CONF_NAME, default=(data.get(CONF_NAME) if data else None)): str,
         vol.Optional(
             CONF_MOTION_ENTITY,
             default=motion_default,
@@ -95,25 +92,39 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
 
     # Only add defaults for optional single-entity selectors if they have values
     if data and data.get(CONF_OVERRIDE_SWITCH):
-        schema_dict[vol.Optional(CONF_OVERRIDE_SWITCH, default=data.get(CONF_OVERRIDE_SWITCH))] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
+        schema_dict[
+            vol.Optional(CONF_OVERRIDE_SWITCH, default=data.get(CONF_OVERRIDE_SWITCH))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
     else:
-        schema_dict[vol.Optional(CONF_OVERRIDE_SWITCH)] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
+        schema_dict[vol.Optional(CONF_OVERRIDE_SWITCH)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="switch")
+        )
 
     if data and data.get(CONF_DARK_INSIDE):
-        schema_dict[vol.Optional(CONF_DARK_INSIDE, default=data.get(CONF_DARK_INSIDE))] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "binary_sensor"]))
+        schema_dict[
+            vol.Optional(CONF_DARK_INSIDE, default=data.get(CONF_DARK_INSIDE))
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["switch", "binary_sensor"])
+        )
     else:
-        schema_dict[vol.Optional(CONF_DARK_INSIDE)] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "binary_sensor"]))
+        schema_dict[vol.Optional(CONF_DARK_INSIDE)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["switch", "binary_sensor"])
+        )
 
     if data and data.get(CONF_HOUSE_ACTIVE):
-        schema_dict[vol.Optional(CONF_HOUSE_ACTIVE, default=data.get(CONF_HOUSE_ACTIVE))] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"]))
+        schema_dict[
+            vol.Optional(CONF_HOUSE_ACTIVE, default=data.get(CONF_HOUSE_ACTIVE))
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["input_boolean", "switch", "binary_sensor"]
+            )
+        )
     else:
-        schema_dict[vol.Optional(CONF_HOUSE_ACTIVE)] = \
-            selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"]))
+        schema_dict[vol.Optional(CONF_HOUSE_ACTIVE)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["input_boolean", "switch", "binary_sensor"]
+            )
+        )
 
     return vol.Schema(schema_dict)
 
@@ -124,33 +135,43 @@ def get_advanced_schema(data: dict[str, Any] | None = None) -> vol.Schema:
         {
             vol.Optional(
                 CONF_MOTION_ACTIVATION,
-                default=data.get(CONF_MOTION_ACTIVATION, DEFAULT_MOTION_ACTIVATION)
-                if data
-                else DEFAULT_MOTION_ACTIVATION,
+                default=(
+                    data.get(CONF_MOTION_ACTIVATION, DEFAULT_MOTION_ACTIVATION)
+                    if data
+                    else DEFAULT_MOTION_ACTIVATION
+                ),
             ): bool,
             vol.Optional(
                 CONF_EXTENDED_TIMEOUT,
-                default=data.get(CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT)
-                if data
-                else DEFAULT_EXTENDED_TIMEOUT,
+                default=(
+                    data.get(CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT)
+                    if data
+                    else DEFAULT_EXTENDED_TIMEOUT
+                ),
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=7200)),
             vol.Optional(
                 CONF_NO_MOTION_WAIT,
-                default=data.get(CONF_NO_MOTION_WAIT, DEFAULT_NO_MOTION_WAIT)
-                if data
-                else DEFAULT_NO_MOTION_WAIT,
+                default=(
+                    data.get(CONF_NO_MOTION_WAIT, DEFAULT_NO_MOTION_WAIT)
+                    if data
+                    else DEFAULT_NO_MOTION_WAIT
+                ),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=3600)),
             vol.Optional(
                 CONF_BRIGHTNESS_ACTIVE,
-                default=data.get(CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE)
-                if data
-                else DEFAULT_BRIGHTNESS_ACTIVE,
+                default=(
+                    data.get(CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE)
+                    if data
+                    else DEFAULT_BRIGHTNESS_ACTIVE
+                ),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
             vol.Optional(
                 CONF_BRIGHTNESS_INACTIVE,
-                default=data.get(CONF_BRIGHTNESS_INACTIVE, DEFAULT_BRIGHTNESS_INACTIVE)
-                if data
-                else DEFAULT_BRIGHTNESS_INACTIVE,
+                default=(
+                    data.get(CONF_BRIGHTNESS_INACTIVE, DEFAULT_BRIGHTNESS_INACTIVE)
+                    if data
+                    else DEFAULT_BRIGHTNESS_INACTIVE
+                ),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         }
     )
