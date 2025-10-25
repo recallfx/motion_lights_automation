@@ -349,7 +349,6 @@ The integration uses a clean, modular architecture:
 
 ### Quality
 
-**Quality Scale:** Bronze (Foundation) → Silver (In Progress)
 
 - ✅ Config flow
 - ✅ Entity unique IDs
@@ -361,17 +360,11 @@ The integration uses a clean, modular architecture:
 
 ### Testing
 
-Comprehensive test coverage with **217+ tests**:
-- State machine transitions: 60+ tests
-- Configuration flow: 45+ tests
-- Light controller: 35+ tests
-- Coordinator: 40+ tests
-- Motion activation disabled: 4 tests
-- Edge cases and error handling
+Comprehensive test coverage with 217 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, and edge cases.
 
 Run tests:
 ```bash
-pytest tests/
+uv run pytest tests/
 ```
 
 ---
@@ -393,16 +386,18 @@ Contributions are welcome! Please:
 git clone https://github.com/recallfx/motion_lights_automation.git
 cd motion_lights_automation
 
-# Set up virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
 
 # Install dependencies
-pip install -e .
-pip install -r requirements_dev.txt
+uv sync
 
 # Run tests
-pytest tests/
+uv run pytest tests/
+
+# Run linting
+uv run ruff check .
+
+# Format code
+uv run ruff format .
 ```
 
 ---
@@ -437,7 +432,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues:** [GitHub Issues](https://github.com/recallfx/motion_lights_automation/issues)
 - **Discussions:** [Home Assistant Community](https://community.home-assistant.io/)
-- **Documentation:** See [`custom_components/motion_lights_automation/README.md`](custom_components/motion_lights_automation/README.md) for detailed documentation
+- **Documentation:** See [ARCHITECTURE.md](custom_components/motion_lights_automation/ARCHITECTURE.md) for detailed technical documentation
 
 ---
 
