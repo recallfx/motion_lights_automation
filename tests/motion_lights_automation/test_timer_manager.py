@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.motion_lights_automation.timer_manager import (
     Timer,
@@ -45,7 +48,7 @@ class TestTimer:
         timer = Timer(TimerType.MOTION, 0.1, callback, hass)
 
         timer.start()
-        await asyncio.sleep(0.2)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=0.2))
         await hass.async_block_till_done()
 
         callback.assert_called_once()
@@ -62,7 +65,8 @@ class TestTimer:
         timer.cancel()
         assert timer.is_active is False
 
-        await asyncio.sleep(0.1)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=11))
+        await hass.async_block_till_done()
         callback.assert_not_called()
 
     async def test_timer_extend(self, hass: HomeAssistant):
