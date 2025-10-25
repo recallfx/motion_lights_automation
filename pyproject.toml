@@ -1,4 +1,6 @@
 [project]
+name = "motion_lights_automation"
+version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "homeassistant==2024.12.5",
@@ -8,3 +10,18 @@ dependencies = [
     "pytest-homeassistant-custom-component>=0.13.45",
     "ruff>=0.8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_errors = true
+follow_imports = "silent"
+ignore_missing_imports = true
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_configs = true
