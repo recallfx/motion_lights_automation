@@ -441,8 +441,7 @@ current_brightness_mode: active
 no_motion_wait: 300
 extended_timeout: 1200
 motion_entity: binary_sensor.kitchen_motion
-ceiling_light: light.kitchen_ceiling
-background_light: light.kitchen_under_cabinet
+lights: light.kitchen_ceiling, light.kitchen_under_cabinet
 override_switch: input_boolean.kitchen_override
 house_active_switch: input_boolean.house_active
 ambient_light_sensor: binary_sensor.sun_below_horizon  # or sensor.kitchen_illuminance

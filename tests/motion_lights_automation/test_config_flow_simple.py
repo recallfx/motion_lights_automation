@@ -44,7 +44,7 @@ class TestConfigFlowBasics:
 
     def test_entity_list_handling_multiple(self) -> None:
         """Test handling multiple entities."""
-        entities = ["light.background", "light.feature", "light.ceiling"]
+        entities = ["light.one", "light.two", "light.three"]
         assert len(entities) == 3
 
     def test_config_defaults(self) -> None:
@@ -64,7 +64,7 @@ class TestConfigFlowBasics:
         """Test entity validation logic."""
         entities = {
             "motion": "binary_sensor.motion",
-            "background_light": "light.background",
+            "lights": "light.living_room",
             "override_switch": "switch.override",
         }
 

@@ -36,25 +36,14 @@ from .motion_coordinator import MotionLightsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-_LOGGER = logging.getLogger(__name__)
-
 _PLATFORMS: list[Platform] = [Platform.SENSOR]
-
-# Light types configuration
-LIGHT_TYPE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("ceiling"): cv.entity_ids,
-        vol.Optional("background"): cv.entity_ids,
-        vol.Optional("feature"): cv.entity_ids,
-    }
-)
 
 # YAML configuration schema
 AUTOMATION_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
         vol.Required(CONF_MOTION_ENTITY): cv.entity_ids,
-        vol.Required(CONF_LIGHTS): LIGHT_TYPE_SCHEMA,
+        vol.Required(CONF_LIGHTS): cv.entity_ids,
         vol.Optional(CONF_OVERRIDE_SWITCH): cv.entity_ids,
         vol.Optional(CONF_HOUSE_ACTIVE): cv.entity_ids,
         vol.Optional(CONF_AMBIENT_LIGHT_SENSOR): cv.entity_ids,
@@ -113,43 +102,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             )
             continue
 
-        # Flatten the lights configuration
-        lights_config = automation_config[CONF_LIGHTS]
-        flattened_config = {
-            CONF_NAME: name,
-            CONF_MOTION_ENTITY: automation_config[CONF_MOTION_ENTITY],
-            "ceiling_light": lights_config.get("ceiling", []),
-            "background_light": lights_config.get("background", []),
-            "feature_light": lights_config.get("feature", []),
-            CONF_OVERRIDE_SWITCH: automation_config.get(CONF_OVERRIDE_SWITCH, []),
-            CONF_HOUSE_ACTIVE: automation_config.get(CONF_HOUSE_ACTIVE, []),
-            CONF_AMBIENT_LIGHT_SENSOR: automation_config.get(
-                CONF_AMBIENT_LIGHT_SENSOR, []
-            ),
-            CONF_NO_MOTION_WAIT: automation_config[CONF_NO_MOTION_WAIT],
-            CONF_EXTENDED_TIMEOUT: automation_config[CONF_EXTENDED_TIMEOUT],
-            CONF_MOTION_DELAY: automation_config[CONF_MOTION_DELAY],
-            CONF_BRIGHTNESS_ACTIVE: automation_config[CONF_BRIGHTNESS_ACTIVE],
-            CONF_BRIGHTNESS_INACTIVE: automation_config[CONF_BRIGHTNESS_INACTIVE],
-            CONF_AMBIENT_LIGHT_THRESHOLD: automation_config[
-                CONF_AMBIENT_LIGHT_THRESHOLD
-            ],
-            CONF_MOTION_ACTIVATION: automation_config[CONF_MOTION_ACTIVATION],
-        }
-
         # Convert list fields to single values if they have exactly one element
         # to match the config_flow expectations
+        import_config = automation_config.copy()
         for key in [CONF_OVERRIDE_SWITCH, CONF_HOUSE_ACTIVE, CONF_AMBIENT_LIGHT_SENSOR]:
             if (
-                isinstance(flattened_config.get(key), list)
-                and len(flattened_config[key]) == 1
+                isinstance(import_config.get(key), list)
+                and len(import_config[key]) == 1
             ):
-                flattened_config[key] = flattened_config[key][0]
+                import_config[key] = import_config[key][0]
             elif (
-                isinstance(flattened_config.get(key), list)
-                and len(flattened_config[key]) == 0
+                isinstance(import_config.get(key), list)
+                and len(import_config[key]) == 0
             ):
-                flattened_config[key] = None
+                import_config[key] = None
 
         # Create a config entry from YAML
         _LOGGER.info("Importing Motion Lights Automation '%s' from YAML", name)
@@ -157,7 +123,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": SOURCE_IMPORT},
-                data=flattened_config,
+                data=import_config,
             )
         )
 

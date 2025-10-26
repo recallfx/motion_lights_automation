@@ -21,7 +21,7 @@ class TestCoordinatorBasics:
             "no_motion_wait_seconds": 300,
             "extended_timeout": 1200,
             "motion_entity": "binary_sensor.motion_sensor",
-            "background_light_entity": "light.background",
+            "lights": ["light.one", "light.two"],
             "override_switch": "switch.override",
             "last_motion_time": None,
             "manual_reason": None,
@@ -79,15 +79,17 @@ class TestCoordinatorBasics:
         """Test entity assignments."""
         entities = {
             "motion_entity": "binary_sensor.motion_sensor",
-            "background_light_entity": "light.background",
-            "feature_light_entity": "light.feature",
-            "ceiling_light_entity": "light.ceiling",
+            "lights": ["light.one", "light.two", "light.three"],
             "override_switch": "switch.override",
         }
 
-        for name, entity_id in entities.items():
-            if entity_id:
-                assert "." in entity_id
+        for name, value in entities.items():
+            if value:
+                if isinstance(value, list):
+                    for entity_id in value:
+                        assert "." in entity_id
+                else:
+                    assert "." in value
 
     def test_coordinator_override_status(self) -> None:
         """Test override status."""

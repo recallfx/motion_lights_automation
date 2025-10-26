@@ -14,6 +14,7 @@ from custom_components.motion_lights_automation.const import (
     CONF_BRIGHTNESS_INACTIVE,
     CONF_EXTENDED_TIMEOUT,
     CONF_HOUSE_ACTIVE,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_DELAY,
     CONF_MOTION_ENTITY,
@@ -60,9 +61,7 @@ async def test_yaml_setup_basic(
             {
                 "name": "Test YAML Basic",
                 CONF_MOTION_ENTITY: [mock_motion_sensor],
-                "lights": {
-                    "ceiling": [mock_light],
-                },
+                "lights": [mock_light],
             }
         ]
     }
@@ -93,11 +92,7 @@ async def test_yaml_setup_full_config(
             {
                 "name": "Test YAML Full",
                 CONF_MOTION_ENTITY: [mock_motion_sensor],
-                "lights": {
-                    "ceiling": [mock_light],
-                    "background": ["light.background"],
-                    "feature": ["light.feature"],
-                },
+                "lights": [mock_light, "light.background", "light.feature"],
                 CONF_OVERRIDE_SWITCH: [mock_override_switch],
                 CONF_HOUSE_ACTIVE: ["switch.house_active"],
                 CONF_AMBIENT_LIGHT_SENSOR: [mock_ambient_light_sensor],
@@ -136,16 +131,12 @@ async def test_yaml_setup_multiple_instances(
             {
                 "name": "Test YAML Instance 1",
                 CONF_MOTION_ENTITY: [mock_motion_sensor],
-                "lights": {
-                    "ceiling": [mock_light],
-                },
+                "lights": [mock_light],
             },
             {
                 "name": "Test YAML Instance 2",
                 CONF_MOTION_ENTITY: ["binary_sensor.motion_2"],
-                "lights": {
-                    "ceiling": ["light.light_2"],
-                },
+                "lights": ["light.light_2"],
             },
         ]
     }
@@ -179,16 +170,13 @@ async def test_yaml_import_step(
     """Test the config flow import step."""
     from homeassistant.config_entries import ConfigFlowContext
 
-
     # Create a proper context for the flow
     context = ConfigFlowContext(source=SOURCE_IMPORT)
 
     import_data = {
         "name": "Test Import",
         CONF_MOTION_ENTITY: [mock_motion_sensor],
-        "ceiling_light": [mock_light],
-        "background_light": [],
-        "feature_light": [],
+        CONF_LIGHTS: [mock_light],
         CONF_OVERRIDE_SWITCH: None,
         CONF_HOUSE_ACTIVE: None,
         CONF_AMBIENT_LIGHT_SENSOR: None,
@@ -234,9 +222,7 @@ async def test_yaml_import_duplicate_prevented(
     import_data = {
         "name": "Test Duplicate",
         CONF_MOTION_ENTITY: [mock_motion_sensor],
-        "ceiling_light": [mock_light],
-        "background_light": [],
-        "feature_light": [],
+        CONF_LIGHTS: [mock_light],
         CONF_OVERRIDE_SWITCH: None,
         CONF_HOUSE_ACTIVE: None,
         CONF_AMBIENT_LIGHT_SENSOR: None,

@@ -110,7 +110,7 @@ class TestStateMachineBasics:
         config_data = {
             "name": "Test Lights",
             "motion_entity": ["binary_sensor.motion"],
-            "background_light": ["light.background"],
+            "lights": ["light.living_room"],
             "brightness_active": 50,
             "brightness_inactive": 10,
         }
@@ -235,12 +235,10 @@ class TestSensorAttributes:
         """Test entity assignment attributes."""
         attributes = {
             "motion_entity": "binary_sensor.motion",
-            "background_light": "light.background",
-            "feature_light": "light.feature",
-            "ceiling_light": "light.ceiling",
+            "lights": ["light.one", "light.two", "light.three"],
             "override_switch": "switch.override",
         }
 
         assert "binary_sensor" in attributes["motion_entity"]
-        assert "light" in attributes["background_light"]
+        assert isinstance(attributes["lights"], list)
         assert "switch" in attributes["override_switch"]

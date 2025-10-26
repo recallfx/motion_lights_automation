@@ -44,9 +44,7 @@ class TestMotionLightsSensorBasics:
             "no_motion_wait": 300,
             "extended_timeout": 1200,
             "motion_entity": "binary_sensor.motion_sensor",
-            "background_light": "light.background",
-            "feature_light": "light.feature",
-            "ceiling_light": "light.ceiling",
+            "lights": ["light.background", "light.feature", "light.ceiling"],
             "override_switch": "switch.override",
             "last_motion_time": None,
         }
@@ -114,15 +112,18 @@ class TestMotionLightsSensorBasics:
         """Test entity references are properly formatted."""
         entities = {
             "motion_entity": "binary_sensor.motion_sensor",
-            "background_light": "light.background",
-            "feature_light": "light.feature",
-            "ceiling_light": "light.ceiling",
+            "lights": ["light.one", "light.two", "light.three"],
             "override_switch": "switch.override",
         }
 
-        for name, entity_id in entities.items():
-            assert "." in entity_id
-            assert len(entity_id) > 0
+        for name, value in entities.items():
+            if isinstance(value, list):
+                for entity_id in value:
+                    assert "." in entity_id
+                    assert len(entity_id) > 0
+            else:
+                assert "." in value
+                assert len(value) > 0
 
     def test_sensor_has_entity_name_flag(self) -> None:
         """Test sensor uses has_entity_name."""
