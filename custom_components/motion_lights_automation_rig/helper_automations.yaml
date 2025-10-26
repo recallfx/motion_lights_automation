@@ -1,5 +1,4 @@
-"""Helper automations for Motion Lights Test Rig."""
-
+# Helper automations for Motion Lights Test Rig.
 # Add this to your automations.yaml or create as YAML automations in UI
 
 automations:

@@ -118,14 +118,14 @@ entities:
     icon: mdi:motion-sensor
   - entity: binary_sensor.living_room_motion
     name: Motion Sensor
-  
+
   # Lights
   - type: section
     label: Lights
   - entity: light.living_room_ceiling_light
   - entity: light.living_room_background_light
   - entity: light.living_room_feature_light
-  
+
   # Controls
   - type: section
     label: Controls
@@ -135,7 +135,7 @@ entities:
     name: Dark Inside
   - entity: input_boolean.living_room_house_active
     name: House Active
-  
+
   # Automation Status
   - type: section
     label: Automation
@@ -155,7 +155,7 @@ target:
   entity_id: switch.living_room_motion_toggle
 
 # Wait 2 seconds, verify lights are on
-# Turn off motion  
+# Turn off motion
 service: switch.turn_off
 target:
   entity_id: switch.living_room_motion_toggle
@@ -420,7 +420,7 @@ automation:
       - service: switch.turn_off
         target:
           entity_id: switch.test_room_motion_toggle
-      
+
       # Test 2: Brightness modes
       - delay: 10
       - service: input_boolean.turn_off
@@ -433,7 +433,7 @@ automation:
       - service: switch.turn_off
         target:
           entity_id: switch.test_room_motion_toggle
-      
+
       # Test 3: Override
       - delay: 10
       - service: switch.turn_on
@@ -458,8 +458,8 @@ Part of the Motion Lights Automation project.
 
 ## 👤 Credits
 
-**Author:** recallfx  
-**Purpose:** Testing and development for Motion Lights Automation  
+**Author:** recallfx
+**Purpose:** Testing and development for Motion Lights Automation
 **Integration Type:** Helper
 
 ---
