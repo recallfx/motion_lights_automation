@@ -17,6 +17,7 @@ CONF_HOUSE_ACTIVE = "house_active"  # Switch/input_boolean for house active stat
 # New configuration options for continuous monitoring
 CONF_MOTION_ACTIVATION = "motion_activation"  # Enable/disable motion-based control
 CONF_EXTENDED_TIMEOUT = "extended_timeout"  # Time before lights turn off
+CONF_MOTION_DELAY = "motion_delay"  # Delay before turning on lights after motion detected
 
 # Default values
 DEFAULT_NO_MOTION_WAIT = 300
@@ -26,6 +27,7 @@ DEFAULT_BRIGHTNESS_INACTIVE = 10
 # New defaults
 DEFAULT_MOTION_ACTIVATION = True  # Motion detection enabled by default
 DEFAULT_EXTENDED_TIMEOUT = 1200  # 20 minutes before lights turn off
+DEFAULT_MOTION_DELAY = 0  # No delay by default (instant response)
 
 
 # State constants (public strings used by sensors/diagnostics)

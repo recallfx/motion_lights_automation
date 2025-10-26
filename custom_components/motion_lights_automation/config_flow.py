@@ -20,6 +20,7 @@ from .const import (
     CONF_HOUSE_ACTIVE,
     CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
+    CONF_MOTION_DELAY,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     CONF_OVERRIDE_SWITCH,
@@ -27,6 +28,7 @@ from .const import (
     DEFAULT_BRIGHTNESS_INACTIVE,
     DEFAULT_EXTENDED_TIMEOUT,
     DEFAULT_MOTION_ACTIVATION,
+    DEFAULT_MOTION_DELAY,
     DEFAULT_NO_MOTION_WAIT,
     DOMAIN,
 )
@@ -125,6 +127,14 @@ def get_advanced_schema(data: dict[str, Any] | None = None) -> vol.Schema:
                     else DEFAULT_MOTION_ACTIVATION
                 ),
             ): bool,
+            vol.Optional(
+                CONF_MOTION_DELAY,
+                default=(
+                    data.get(CONF_MOTION_DELAY, DEFAULT_MOTION_DELAY)
+                    if data
+                    else DEFAULT_MOTION_DELAY
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=30)),
             vol.Optional(
                 CONF_EXTENDED_TIMEOUT,
                 default=(

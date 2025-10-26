@@ -18,6 +18,7 @@ from .const import (
     CONF_HOUSE_ACTIVE,
     CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
+    CONF_MOTION_DELAY,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     CONF_OVERRIDE_SWITCH,
@@ -25,6 +26,7 @@ from .const import (
     DEFAULT_BRIGHTNESS_INACTIVE,
     DEFAULT_EXTENDED_TIMEOUT,
     DEFAULT_MOTION_ACTIVATION,
+    DEFAULT_MOTION_DELAY,
     DEFAULT_NO_MOTION_WAIT,
     DOMAIN,
     STATE_AUTO,
@@ -116,6 +118,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.motion_activation = data.get(
             CONF_MOTION_ACTIVATION, DEFAULT_MOTION_ACTIVATION
         )
+        self._motion_delay = data.get(CONF_MOTION_DELAY, DEFAULT_MOTION_DELAY)
         self._no_motion_wait = data.get(CONF_NO_MOTION_WAIT, DEFAULT_NO_MOTION_WAIT)
         self.extended_timeout = data.get(
             CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT
@@ -286,7 +289,23 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.timer_manager.cancel_all_timers()
                 self.state_machine.transition(StateTransitionEvent.MOTION_ON)
             elif current in (STATE_IDLE, STATE_MANUAL_OFF):
-                self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+                # Check if motion delay is configured
+                if self._motion_delay > 0:
+                    _LOGGER.debug(
+                        "Motion detected in %s state, starting %ds delay timer",
+                        current,
+                        self._motion_delay,
+                    )
+                    # Start delay timer - will trigger activation if motion still active
+                    self.timer_manager.start_timer(
+                        "motion_delay",
+                        TimerType.CUSTOM,
+                        self._async_motion_delay_expired,
+                        duration=self._motion_delay,
+                    )
+                else:
+                    # No delay - immediate activation
+                    self.state_machine.transition(StateTransitionEvent.MOTION_ON)
         except Exception:
             _LOGGER.exception("Error in motion ON handler")
 
@@ -565,6 +584,18 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Timer expired - transition to idle."""
         _LOGGER.info("Timer expired: %s", timer_id)
         self.state_machine.transition(StateTransitionEvent.TIMER_EXPIRED)
+
+    async def _async_motion_delay_expired(self, timer_id: str = None) -> None:
+        """Motion delay timer expired - check if motion still active and activate lights."""
+        _LOGGER.debug("Motion delay timer expired")
+        
+        # Check if motion is still active
+        motion_trigger = self.trigger_manager.get_trigger("motion")
+        if motion_trigger and motion_trigger.is_active():
+            _LOGGER.info("Motion still active after %ds delay - activating lights", self._motion_delay)
+            self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+        else:
+            _LOGGER.info("Motion cleared during %ds delay - not activating lights", self._motion_delay)
 
     # ========================================================================
     # Light Control

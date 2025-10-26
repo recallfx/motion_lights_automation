@@ -26,6 +26,7 @@
         "description": "Configure advanced settings and timing options",
         "data": {
           "motion_activation": "Enable Motion Detection",
+          "motion_delay": "Motion Delay (seconds)",
           "extended_timeout": "Extended Timeout (seconds)",
           "no_motion_wait": "Motion Wait Time (seconds)",
           "brightness_active": "Active Brightness (%)",
@@ -33,6 +34,7 @@
         },
         "data_description": {
           "motion_activation": "Enable automatic light control based on motion detection",
+          "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
           "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
           "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
           "brightness_active": "Brightness level when house is active (0-100%)",
@@ -64,6 +66,7 @@
         "description": "Update the advanced configuration for {name}",
         "data": {
           "motion_activation": "Enable Motion Detection",
+          "motion_delay": "Motion Delay (seconds)",
           "extended_timeout": "Extended Timeout (seconds)",
           "no_motion_wait": "Motion Wait Time (seconds)",
           "brightness_active": "Active Brightness (%)",
@@ -71,6 +74,7 @@
         },
         "data_description": {
           "motion_activation": "Enable automatic light control based on motion detection",
+          "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
           "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
           "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
           "brightness_active": "Brightness level when house is active (0-100%)",

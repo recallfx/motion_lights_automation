@@ -16,6 +16,7 @@
                     "brightness_inactive": "Inactive Brightness (%)",
                     "extended_timeout": "Extended Timeout (seconds)",
                     "motion_activation": "Enable Motion Detection",
+                    "motion_delay": "Motion Delay (seconds)",
                     "no_motion_wait": "Motion Wait Time (seconds)"
                 },
                 "data_description": {
@@ -23,6 +24,7 @@
                     "brightness_inactive": "Brightness level when house is inactive (0-100%)",
                     "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
                     "motion_activation": "Enable automatic light control based on motion detection",
+                    "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
                     "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)"
                 },
                 "description": "Configure advanced settings and timing options",
@@ -54,6 +56,7 @@
                     "brightness_inactive": "Inactive Brightness (%)",
                     "extended_timeout": "Extended Timeout (seconds)",
                     "motion_activation": "Enable Motion Detection",
+                    "motion_delay": "Motion Delay (seconds)",
                     "no_motion_wait": "Motion Wait Time (seconds)"
                 },
                 "data_description": {
@@ -61,6 +64,7 @@
                     "brightness_inactive": "Brightness level when house is inactive (0-100%)",
                     "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
                     "motion_activation": "Enable automatic light control based on motion detection",
+                    "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
                     "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)"
                 },
                 "description": "Update the advanced configuration for {name}",

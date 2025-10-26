@@ -86,6 +86,7 @@ Fine-tune the behavior:
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
 | **Motion Activation** | Enabled | On/Off | Enable/disable motion detection |
+| **Motion Delay** | 0s | 0-30s | Delay before turning on lights after motion detected |
 | **No Motion Wait** | 300s | 0-3600s | Seconds to wait after motion stops before turning off |
 | **Extended Timeout** | 1200s | 0-7200s | Additional time for manual/auto modes before returning to idle |
 | **Brightness Active** | 80% | 0-100% | Brightness when house is active |
@@ -244,6 +245,35 @@ automation:
 - Override Switch: `input_boolean.bathroom_override`
 - No Motion Wait: `180` (3 minutes)
 - Brightness Active: `100`
+
+### Example 5: Sequential Lighting Flow
+
+**Goal:** Create a natural progression of lighting as you move through connected spaces.
+
+When you have an open floor plan or connected rooms, you can create a lighting flow that follows your movement. Configure each area with an increasing delay so lights activate in sequence, creating a welcoming path rather than everything turning on at once.
+
+**Entryway Configuration (First to activate):**
+- Motion Sensors: `binary_sensor.entryway_motion`
+- Ceiling Lights: `light.entryway_ceiling`
+- Motion Delay: `0` (activates immediately)
+- No Motion Wait: `300`
+
+**Hallway Configuration (Second):**
+- Motion Sensors: `binary_sensor.hallway_motion`
+- Ceiling Lights: `light.hallway_ceiling`
+- Motion Delay: `2` (2-second delay)
+- No Motion Wait: `300`
+
+**Living Room Configuration (Third):**
+- Motion Sensors: `binary_sensor.living_room_motion`
+- Ceiling Lights: `light.living_room_ceiling`
+- Motion Delay: `4` (4-second delay)
+- No Motion Wait: `300`
+
+**Result:** Coming home at night, lights activate progressively:
+- Entryway → *2 seconds* → Hallway → *2 seconds* → Living Room
+
+This creates a more natural, theater-like effect where the home "wakes up" sequentially rather than all at once.
 
 ---
 
@@ -404,6 +434,10 @@ uv run ruff format .
 
 ## Changelog
 
+### 5.1.0
+
+Added **Motion Delay** feature for creating sequential lighting flows. Configure a 0-30 second delay before lights turn on after motion detection. This creates natural lighting progressions where lights activate in sequence as you move through connected spaces, rather than everything turning on simultaneously.
+
 ### 4.0.1
 
 Motion sensors now reset the extended timer even when motion_activation is disabled. Previously, lights would turn off after the extended timeout regardless of ongoing motion detection. The fix ensures the MotionTrigger fires callbacks unconditionally, letting the coordinator decide how to handle them based on current state and settings.
@@ -448,4 +482,4 @@ If this project helps you, please give it a ⭐️!
 
 ---
 
-**Last Updated:** October 25, 2025
+**Last Updated:** October 26, 2025
