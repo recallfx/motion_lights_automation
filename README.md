@@ -108,10 +108,8 @@ motion_lights_automation:
     motion_entity:
       - binary_sensor.kitchen_motion
     lights:
-      ceiling:
-        - light.kitchen_ceiling
-      background:
-        - light.kitchen_under_cabinet
+      - light.kitchen_ceiling
+      - light.kitchen_under_cabinet
 ```
 
 ### Full YAML Example
@@ -123,13 +121,10 @@ motion_lights_automation:
       - binary_sensor.living_room_motion_1
       - binary_sensor.living_room_motion_2
     lights:
-      ceiling:
-        - light.living_room_main
-      background:
-        - light.living_room_lamp_1
-        - light.living_room_lamp_2
-      feature:
-        - light.living_room_accent
+      - light.living_room_main
+      - light.living_room_lamp_1
+      - light.living_room_lamp_2
+      - light.living_room_accent
     override_switch:
       - switch.living_room_override
     house_active:
@@ -153,15 +148,13 @@ motion_lights_automation:
     motion_entity:
       - binary_sensor.bedroom_motion
     lights:
-      ceiling:
-        - light.bedroom_ceiling
+      - light.bedroom_ceiling
 
   - name: "Bathroom"
     motion_entity:
       - binary_sensor.bathroom_motion
     lights:
-      ceiling:
-        - light.bathroom_ceiling
+      - light.bathroom_ceiling
     no_motion_wait: 180
 ```
 
@@ -186,16 +179,13 @@ motion_lights_automation:
 **Lights configuration:**
 ```yaml
 lights:
-  ceiling:  # optional list of ceiling lights
-    - light.entity_1
-  background:  # optional list of background lights
-    - light.entity_2
-  feature:  # optional list of feature lights
-    - light.entity_3
+  - light.entity_1
+  - light.entity_2
+  - light.entity_3
 ```
 
 **Notes:**
-- At least one light type (ceiling, background, or feature) must be configured
+- At least one light entity must be configured
 - YAML configurations are imported as config entries on Home Assistant startup
 - Duplicate names are prevented - YAML import will skip if a UI entry with the same name exists
 - You can reconfigure YAML entries through the UI after import
@@ -602,8 +592,8 @@ motion_lights_automation:
     motion_entity:
       - binary_sensor.kitchen_motion
     lights:
-      ceiling:
-        - light.kitchen_ceiling
+      - light.kitchen_ceiling
+      - light.kitchen_under_cabinet
 ```
 
 See the "YAML Configuration" section in the README for complete documentation.
