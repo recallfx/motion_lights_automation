@@ -96,7 +96,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         # Check if this automation already exists (by name)
         existing_entries = hass.config_entries.async_entries(DOMAIN)
         if any(entry.title == name for entry in existing_entries):
-            _LOGGER.warning(
+            _LOGGER.info(
                 "Motion Lights Automation '%s' already exists, skipping YAML import",
                 name,
             )

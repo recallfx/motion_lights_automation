@@ -297,7 +297,7 @@ class MotionLightsStateMachine:
 
     def force_state(self, state: str) -> None:
         """Force the state machine to a specific state (use sparingly)."""
-        _LOGGER.warning("Forcing state to %s", state)
+        _LOGGER.info("Forcing state to %s", state)
         self._previous_state = self._current_state
         self._current_state = state
         self._state_entered_at = dt_util.now()

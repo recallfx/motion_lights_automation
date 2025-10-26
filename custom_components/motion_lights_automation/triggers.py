@@ -129,7 +129,7 @@ class MotionTrigger(TriggerHandler):
         # Verify entities exist (warn but continue)
         missing = [eid for eid in self.entity_ids if not self.hass.states.get(eid)]
         if missing:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "Motion sensors not yet available: %s (will monitor once they appear)",
                 missing,
             )
@@ -226,7 +226,7 @@ class OverrideTrigger(TriggerHandler):
         # Check if entity exists (warn but continue)
         state = self.hass.states.get(self.entity_id)
         if not state:
-            _LOGGER.warning(
+            _LOGGER.info(
                 "Override switch not yet available: %s (will monitor once it appears)",
                 self.entity_id,
             )
