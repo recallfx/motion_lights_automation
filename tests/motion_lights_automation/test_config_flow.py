@@ -11,11 +11,10 @@ from homeassistant.data_entry_flow import FlowResultType
 
 # Import from const (standalone module without relative imports)
 from custom_components.motion_lights_automation.const import (
+    CONF_AMBIENT_LIGHT_SENSOR,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
-    CONF_HOUSE_ACTIVE,
     CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
@@ -77,7 +76,7 @@ class TestUserFlow:
         hass.states.async_set("light.feature", "off")
         hass.states.async_set("light.ceiling", "off")
         hass.states.async_set("switch.override", "off")
-        hass.states.async_set("binary_sensor.dark", "off")
+        hass.states.async_set("binary_sensor.ambient_light", "off")
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}
@@ -89,9 +88,14 @@ class TestUserFlow:
             user_input={
                 CONF_NAME: "Full Config",
                 CONF_MOTION_ENTITY: ["binary_sensor.motion1", "binary_sensor.motion2"],
-                CONF_LIGHTS: ["light.bg1", "light.bg2", "light.feature", "light.ceiling"],
+                CONF_LIGHTS: [
+                    "light.bg1",
+                    "light.bg2",
+                    "light.feature",
+                    "light.ceiling",
+                ],
                 CONF_OVERRIDE_SWITCH: "switch.override",
-                CONF_DARK_INSIDE: "binary_sensor.dark",
+                CONF_AMBIENT_LIGHT_SENSOR: "binary_sensor.ambient_light",
             },
         )
 

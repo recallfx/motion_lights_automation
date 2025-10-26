@@ -1,114 +1,118 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "This motion sensor is already configured",
-            "reconfigure_successful": "Successfully updated configuration"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Motion Lights Automation Setup - Basic Configuration",
+        "description": "Configure the essential settings for your motion-activated lighting automation",
+        "data": {
+          "name": "Automation Name",
+          "motion_entity": "Motion Sensor",
+          "lights": "Lights to Control",
+          "override_switch": "Override Switch",
+          "ambient_light_sensor": "Ambient Light Sensor",
+          "house_active": "House Active (optional)"
         },
-        "error": {
-            "cannot_connect": "Cannot connect to entity",
-            "invalid_config": "At least one light must be configured",
-            "unknown": "Unknown error occurred"
+        "data_description": {
+          "name": "A unique name for this motion lights automation instance",
+          "motion_entity": "Binary sensor(s) that detect motion",
+          "lights": "The lights this automation should control",
+          "override_switch": "Switch to enable/disable automation",
+          "ambient_light_sensor": "Lux sensor or binary sensor for ambient light detection (optional)",
+          "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
+        }
+      },
+      "advanced": {
+        "title": "Motion Lights Automation Setup - Advanced Options",
+        "description": "Configure advanced settings and timing options",
+        "data": {
+          "motion_activation": "Enable Motion Detection",
+          "motion_delay": "Motion Delay (seconds)",
+          "extended_timeout": "Extended Timeout (seconds)",
+          "no_motion_wait": "Motion Wait Time (seconds)",
+          "brightness_active": "Active Brightness (%)",
+          "brightness_inactive": "Inactive Brightness (%)",
+          "ambient_light_threshold": "Ambient Light Threshold (lux)"
         },
-        "step": {
-            "advanced": {
-                "data": {
-                    "brightness_active": "Active Brightness (%)",
-                    "brightness_inactive": "Inactive Brightness (%)",
-                    "extended_timeout": "Extended Timeout (seconds)",
-                    "motion_activation": "Enable Motion Detection",
-                    "motion_delay": "Motion Delay (seconds)",
-                    "no_motion_wait": "Motion Wait Time (seconds)"
-                },
-                "data_description": {
-                    "brightness_active": "Brightness level when house is active (0-100%)",
-                    "brightness_inactive": "Brightness level when house is inactive (0-100%)",
-                    "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
-                    "motion_activation": "Enable automatic light control based on motion detection",
-                    "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
-                    "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)"
-                },
-                "description": "Configure advanced settings and timing options",
-                "title": "Motion Lights Automation Setup - Advanced Options"
-            },
-            "reconfigure": {
-                "data": {
-                    "dark_inside": "Dark Inside (optional)",
-                    "house_active": "House Active (optional)",
-                    "lights": "Lights to Control",
-                    "motion_entity": "Motion Sensor",
-                    "name": "Automation Name",
-                    "override_switch": "Override Switch"
-                },
-                "data_description": {
-                    "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
-                    "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)",
-                    "lights": "The lights this automation should control",
-                    "motion_entity": "Binary sensor(s) that detect motion",
-                    "name": "A unique name for this motion lights automation instance",
-                    "override_switch": "Switch to enable/disable automation"
-                },
-                "description": "Update the basic configuration for {name}",
-                "title": "Reconfigure Motion Lights Automation - Basic Settings"
-            },
-            "reconfigure_advanced": {
-                "data": {
-                    "brightness_active": "Active Brightness (%)",
-                    "brightness_inactive": "Inactive Brightness (%)",
-                    "extended_timeout": "Extended Timeout (seconds)",
-                    "motion_activation": "Enable Motion Detection",
-                    "motion_delay": "Motion Delay (seconds)",
-                    "no_motion_wait": "Motion Wait Time (seconds)"
-                },
-                "data_description": {
-                    "brightness_active": "Brightness level when house is active (0-100%)",
-                    "brightness_inactive": "Brightness level when house is inactive (0-100%)",
-                    "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
-                    "motion_activation": "Enable automatic light control based on motion detection",
-                    "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
-                    "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)"
-                },
-                "description": "Update the advanced configuration for {name}",
-                "title": "Reconfigure Motion Lights Automation - Advanced Settings"
-            },
-            "user": {
-                "data": {
-                    "dark_inside": "Dark Inside (optional)",
-                    "house_active": "House Active (optional)",
-                    "lights": "Lights to Control",
-                    "motion_entity": "Motion Sensor",
-                    "name": "Automation Name",
-                    "override_switch": "Override Switch"
-                },
-                "data_description": {
-                    "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
-                    "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)",
-                    "lights": "The lights this automation should control",
-                    "motion_entity": "Binary sensor(s) that detect motion in this area",
-                    "name": "A unique name for this motion lights automation instance",
-                    "override_switch": "Switch to enable/disable automation"
-                },
-                "description": "Configure the essential settings for your motion-activated lighting automation",
-                "title": "Motion Lights Automation Setup - Basic Configuration"
-            }
+        "data_description": {
+          "motion_activation": "Enable automatic light control based on motion detection",
+          "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
+          "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
+          "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
+          "brightness_active": "Brightness level when house is active (0-100%)",
+          "brightness_inactive": "Brightness level when house is inactive (0-100%)",
+          "ambient_light_threshold": "Lux threshold for ambient light detection (10-500 lux, ±20 lux hysteresis)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Motion Lights Automation - Basic Settings",
+        "description": "Update the basic configuration for {name}",
+        "data": {
+          "name": "Automation Name",
+          "motion_entity": "Motion Sensor",
+          "lights": "Lights to Control",
+          "override_switch": "Override Switch",
+          "ambient_light_sensor": "Ambient Light Sensor",
+          "house_active": "House Active (optional)"
+        },
+        "data_description": {
+          "name": "A unique name for this motion lights automation instance",
+          "motion_entity": "Binary sensor(s) that detect motion",
+          "lights": "The lights this automation should control",
+          "override_switch": "Switch to enable/disable automation",
+          "ambient_light_sensor": "Lux sensor or binary sensor for ambient light detection (optional)",
+          "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
+        }
+      },
+      "reconfigure_advanced": {
+        "title": "Reconfigure Motion Lights Automation - Advanced Settings",
+        "description": "Update the advanced configuration for {name}",
+        "data": {
+          "motion_activation": "Enable Motion Detection",
+          "motion_delay": "Motion Delay (seconds)",
+          "extended_timeout": "Extended Timeout (seconds)",
+          "no_motion_wait": "Motion Wait Time (seconds)",
+          "brightness_active": "Active Brightness (%)",
+          "brightness_inactive": "Inactive Brightness (%)",
+          "ambient_light_threshold": "Ambient Light Threshold (lux)"
+        },
+        "data_description": {
+          "motion_activation": "Enable automatic light control based on motion detection",
+          "motion_delay": "Delay before turning on lights after motion detected (0-30 seconds)",
+          "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
+          "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
+          "brightness_active": "Brightness level when house is active (0-100%)",
+          "brightness_inactive": "Brightness level when house is inactive (0-100%)",
+          "ambient_light_threshold": "Lux threshold for ambient light detection (10-500 lux, ±20 lux hysteresis)"
+        }
+      }
     },
-    "entity": {
-        "sensor": {
-            "automation_state": {
-                "name": "Automation State"
-            }
-        }
+    "error": {
+      "cannot_connect": "Cannot connect to entity",
+      "invalid_config": "At least one light must be configured",
+      "unknown": "Unknown error occurred"
     },
-    "services": {
-        "refresh_tracking": {
-            "description": "Refresh the light tracking for this motion lights integration when entities become available.",
-            "fields": {
-                "config_entry_id": {
-                    "description": "The config entry ID of the motion lights integration to refresh.",
-                    "name": "Config entry ID"
-                }
-            },
-            "name": "Refresh light tracking"
-        }
+    "abort": {
+      "already_configured": "This motion sensor is already configured",
+      "reconfigure_successful": "Successfully updated configuration"
     }
+  },
+  "entity": {
+    "sensor": {
+      "automation_state": {
+        "name": "Automation State"
+      }
+    }
+  },
+  "services": {
+    "refresh_tracking": {
+      "name": "Refresh light tracking",
+      "description": "Refresh the light tracking for this motion lights integration when entities become available.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "The config entry ID of the motion lights integration to refresh."
+        }
+      }
+    }
+  }
 }

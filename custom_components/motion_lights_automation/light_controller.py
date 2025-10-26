@@ -181,7 +181,9 @@ class LightController:
             # Skip if already on at correct brightness
             if current_state.state == "on":
                 current_brightness = current_state.attributes.get("brightness", 0)
-                current_brightness_pct = int(current_brightness * 100 / 255) if current_brightness else 0
+                current_brightness_pct = (
+                    int(current_brightness * 100 / 255) if current_brightness else 0
+                )
                 if abs(current_brightness_pct - target_brightness) < 5:
                     _LOGGER.debug(
                         "Light %s already on at correct brightness (%d%%)",

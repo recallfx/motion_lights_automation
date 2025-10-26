@@ -13,9 +13,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AMBIENT_LIGHT_SENSOR,
+    CONF_AMBIENT_LIGHT_THRESHOLD,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
     CONF_HOUSE_ACTIVE,
     CONF_LIGHTS,
@@ -24,6 +25,7 @@ from .const import (
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     CONF_OVERRIDE_SWITCH,
+    DEFAULT_AMBIENT_LIGHT_THRESHOLD,
     DEFAULT_BRIGHTNESS_ACTIVE,
     DEFAULT_BRIGHTNESS_INACTIVE,
     DEFAULT_EXTENDED_TIMEOUT,
@@ -86,15 +88,17 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
             selector.EntitySelectorConfig(domain="switch")
         )
 
-    if data and data.get(CONF_DARK_INSIDE):
+    if data and data.get(CONF_AMBIENT_LIGHT_SENSOR):
         schema_dict[
-            vol.Optional(CONF_DARK_INSIDE, default=data.get(CONF_DARK_INSIDE))
+            vol.Optional(
+                CONF_AMBIENT_LIGHT_SENSOR, default=data.get(CONF_AMBIENT_LIGHT_SENSOR)
+            )
         ] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["switch", "binary_sensor"])
+            selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
         )
     else:
-        schema_dict[vol.Optional(CONF_DARK_INSIDE)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["switch", "binary_sensor"])
+        schema_dict[vol.Optional(CONF_AMBIENT_LIGHT_SENSOR)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
         )
 
     if data and data.get(CONF_HOUSE_ACTIVE):
@@ -167,6 +171,16 @@ def get_advanced_schema(data: dict[str, Any] | None = None) -> vol.Schema:
                     else DEFAULT_BRIGHTNESS_INACTIVE
                 ),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Optional(
+                CONF_AMBIENT_LIGHT_THRESHOLD,
+                default=(
+                    data.get(
+                        CONF_AMBIENT_LIGHT_THRESHOLD, DEFAULT_AMBIENT_LIGHT_THRESHOLD
+                    )
+                    if data
+                    else DEFAULT_AMBIENT_LIGHT_THRESHOLD
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=10, max=500)),
         }
     )
 
@@ -207,10 +221,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if not hass.states.get(ov):
             raise CannotConnect(f"Override switch {ov} not found")
 
-    # If dark inside entity provided, validate it exists (optional)
-    dark_inside = data.get(CONF_DARK_INSIDE)
-    if dark_inside and not hass.states.get(dark_inside):
-        raise CannotConnect(f"Dark inside entity {dark_inside} not found")
+    # If ambient light sensor provided, validate it exists (optional)
+    ambient_light = data.get(CONF_AMBIENT_LIGHT_SENSOR)
+    if ambient_light and not hass.states.get(ambient_light):
+        raise CannotConnect(f"Ambient light sensor {ambient_light} not found")
 
     # If house active entity provided, validate it exists (optional)
     house_active = data.get(CONF_HOUSE_ACTIVE)
@@ -274,7 +288,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             lights_list = sorted(_normalize_list(config_data.get(CONF_LIGHTS)))
             motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
             name = config_data.get(CONF_NAME) or DOMAIN
-            
+
             # Include lights in unique ID to prevent same lights in multiple instances
             lights_key = "|".join(lights_list) if lights_list else "no-lights"
             motion_key = "|".join(motion_list) if motion_list else "no-motion"
@@ -351,7 +365,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             lights_list = sorted(_normalize_list(config_data.get(CONF_LIGHTS)))
             motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
             name = config_data.get(CONF_NAME) or DOMAIN
-            
+
             lights_key = "|".join(lights_list) if lights_list else "no-lights"
             motion_key = "|".join(motion_list) if motion_list else "no-motion"
             new_unique_id = f"{name}:{lights_key}:{motion_key}"

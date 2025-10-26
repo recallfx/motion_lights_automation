@@ -11,9 +11,10 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CONF_AMBIENT_LIGHT_SENSOR,
+    CONF_AMBIENT_LIGHT_THRESHOLD,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
     CONF_HOUSE_ACTIVE,
     CONF_LIGHTS,
@@ -22,6 +23,7 @@ from .const import (
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     CONF_OVERRIDE_SWITCH,
+    DEFAULT_AMBIENT_LIGHT_THRESHOLD,
     DEFAULT_BRIGHTNESS_ACTIVE,
     DEFAULT_BRIGHTNESS_INACTIVE,
     DEFAULT_EXTENDED_TIMEOUT,
@@ -133,7 +135,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self.override_switch = str(override_cfg) if override_cfg else None
 
-        self.dark_inside = data.get(CONF_DARK_INSIDE)
+        self.ambient_light_sensor = data.get(CONF_AMBIENT_LIGHT_SENSOR)
+        self.ambient_light_threshold = data.get(
+            CONF_AMBIENT_LIGHT_THRESHOLD, DEFAULT_AMBIENT_LIGHT_THRESHOLD
+        )
         self.house_active = data.get(CONF_HOUSE_ACTIVE)
         self.brightness_active = data.get(
             CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE
@@ -141,6 +146,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.brightness_inactive = data.get(
             CONF_BRIGHTNESS_INACTIVE, DEFAULT_BRIGHTNESS_INACTIVE
         )
+
+        # Brightness mode state for hysteresis (starts as None, determined on first check)
+        self._brightness_mode_is_dim: bool | None = None
 
         # Lights
         self._lights = _as_list(data.get(CONF_LIGHTS))
@@ -218,13 +226,13 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         _LOGGER.info(
             "Motion Lights Automation initialized: %.2fs | Lights: %d | Timers: %d | "
-            "Motion activation: %s | Override: %s | Dark inside: %s",
+            "Motion activation: %s | Override: %s | Ambient light sensor: %s",
             elapsed,
             total_lights,
             active_timers,
             self.motion_activation,
             bool(self.override_switch),
-            bool(self.dark_inside),
+            bool(self.ambient_light_sensor),
         )
 
     def _set_initial_state(self) -> None:
@@ -588,14 +596,20 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_motion_delay_expired(self, timer_id: str = None) -> None:
         """Motion delay timer expired - check if motion still active and activate lights."""
         _LOGGER.debug("Motion delay timer expired")
-        
+
         # Check if motion is still active
         motion_trigger = self.trigger_manager.get_trigger("motion")
         if motion_trigger and motion_trigger.is_active():
-            _LOGGER.info("Motion still active after %ds delay - activating lights", self._motion_delay)
+            _LOGGER.info(
+                "Motion still active after %ds delay - activating lights",
+                self._motion_delay,
+            )
             self.state_machine.transition(StateTransitionEvent.MOTION_ON)
         else:
-            _LOGGER.info("Motion cleared during %ds delay - not activating lights", self._motion_delay)
+            _LOGGER.info(
+                "Motion cleared during %ds delay - not activating lights",
+                self._motion_delay,
+            )
 
     # ========================================================================
     # Light Control
@@ -615,7 +629,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _get_context(self):
         """Get context for strategies."""
         is_house_active = True
-        is_dark_inside = True
+        use_dim_brightness = True
 
         # Get switch states
         if self.house_active:
@@ -628,27 +642,100 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 is_house_active = house_state.state == "on"
 
-        if self.dark_inside:
-            dark_state = self.hass.states.get(self.dark_inside)
-            if dark_state is None:
+        # Ambient light sensor with hysteresis support
+        if self.ambient_light_sensor:
+            sensor_state = self.hass.states.get(self.ambient_light_sensor)
+            if sensor_state is None:
                 _LOGGER.warning(
-                    "dark_inside entity '%s' not found; assuming dark inside",
-                    self.dark_inside,
+                    "ambient_light_sensor entity '%s' not found; assuming low ambient light",
+                    self.ambient_light_sensor,
                 )
+                use_dim_brightness = True
             else:
-                is_dark_inside = dark_state.state == "on"
+                # Check if it's a lux sensor (numeric) or binary sensor
+                unit = sensor_state.attributes.get("unit_of_measurement")
+
+                if unit == "lx":
+                    # Lux sensor - use hysteresis
+                    try:
+                        current_lux = float(sensor_state.state)
+                        use_dim_brightness = self._evaluate_lux_with_hysteresis(
+                            current_lux
+                        )
+                    except (ValueError, TypeError):
+                        _LOGGER.warning(
+                            "Could not parse lux value '%s' from %s; assuming low ambient light",
+                            sensor_state.state,
+                            self.ambient_light_sensor,
+                        )
+                        use_dim_brightness = True
+                else:
+                    # Binary sensor - ON means low ambient light (dim mode)
+                    use_dim_brightness = sensor_state.state == "on"
 
         motion_trigger = self.trigger_manager.get_trigger("motion")
         motion_active = motion_trigger.is_active() if motion_trigger else False
 
         # Return dict-like context that strategies can use
+        # Keep is_dark_inside for backward compatibility with strategies
         return {
-            "is_dark_inside": is_dark_inside,
+            "is_dark_inside": use_dim_brightness,  # Legacy name for compatibility
+            "use_dim_brightness": use_dim_brightness,
             "is_house_active": is_house_active,
             "motion_active": motion_active,
             "current_state": self.state_machine.current_state,
             "all_lights": self.light_controller.get_all_lights(),
         }
+
+    def _evaluate_lux_with_hysteresis(self, current_lux: float) -> bool:
+        """Evaluate lux level with hysteresis to prevent flickering.
+
+        Uses ±20 lux gap around the threshold.
+        - Threshold 50 lux → LOW range 0-30, HIGH range 70+
+        - When in DIM mode: stays dim until lux > threshold + 20
+        - When in BRIGHT mode: stays bright until lux < threshold - 20
+
+        Returns:
+            bool: True if should use dim brightness (low ambient light)
+        """
+        threshold = self.ambient_light_threshold
+        low_threshold = threshold - 20
+        high_threshold = threshold + 20
+
+        # First time evaluation - no previous state
+        if self._brightness_mode_is_dim is None:
+            # Initialize based on current lux relative to center threshold
+            self._brightness_mode_is_dim = current_lux < threshold
+            _LOGGER.debug(
+                "Initializing brightness mode: lux=%.1f, threshold=%d, mode=%s",
+                current_lux,
+                threshold,
+                "DIM" if self._brightness_mode_is_dim else "BRIGHT",
+            )
+            return self._brightness_mode_is_dim
+
+        # Currently in DIM mode
+        if self._brightness_mode_is_dim:
+            # Stay dim unless lux rises above HIGH threshold
+            if current_lux >= high_threshold:
+                self._brightness_mode_is_dim = False
+                _LOGGER.debug(
+                    "Switching to BRIGHT mode: lux=%.1f > %d",
+                    current_lux,
+                    high_threshold,
+                )
+        # Currently in BRIGHT mode
+        else:
+            # Stay bright unless lux falls below LOW threshold
+            if current_lux <= low_threshold:
+                self._brightness_mode_is_dim = True
+                _LOGGER.debug(
+                    "Switching to DIM mode: lux=%.1f < %d",
+                    current_lux,
+                    low_threshold,
+                )
+
+        return self._brightness_mode_is_dim
 
     # ========================================================================
     # Data Management

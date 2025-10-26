@@ -17,11 +17,11 @@ Motion Lights Automation is a Home Assistant integration that provides sophistic
 - ✅ **Dual timer system** - Motion timer + extended timer for flexible control
 - ✅ **Active/Inactive brightness** - Different brightness levels based on house activity
 - ✅ **House active switch** - Control brightness based on home occupancy/activity
-- ✅ **Dark outside sensor** - Adjust brightness based on ambient light conditions
+- ✅ **Ambient light sensor** - Adjust brightness using boolean or lux sensors with hysteresis
 - ✅ **Full UI configuration** - No YAML required
 
 ### Advanced Features
-- 🎯 **Priority brightness logic** - house_active > dark_outside > default active mode
+- 🎯 **Priority brightness logic** - house_active > ambient_light > default active mode
 - 🔄 **Reconfiguration support** - Update settings without removing the integration
 - 📊 **Status sensor** - Real-time monitoring of automation state
 - ⚡ **Event-driven** - No polling, instant response to changes
@@ -75,7 +75,7 @@ Configure the essential entities:
 | **Feature Lights** | No | Accent/feature lights |
 | **Override Switch** | No | Switch to temporarily disable automation |
 | **House Active Switch** | No | Switch indicating house is active (for brightness control) |
-| **Dark Outside Sensor** | No | Binary sensor indicating darkness (e.g., sun below horizon) |
+| **Ambient Light Sensor** | No | Binary sensor (e.g., sun) or lux sensor for ambient light detection |
 
 **Note:** At least one light type (ceiling, background, or feature) must be configured.
 
@@ -91,6 +91,7 @@ Fine-tune the behavior:
 | **Extended Timeout** | 1200s | 0-7200s | Additional time for manual/auto modes before returning to idle |
 | **Brightness Active** | 80% | 0-100% | Brightness when house is active |
 | **Brightness Inactive** | 10% | 0-100% | Brightness when house is inactive |
+| **Ambient Light Threshold** | 50 lux | 10-500 lux | Threshold for lux sensors (only shown if lux sensor configured) |
 
 ---
 
@@ -154,9 +155,12 @@ Priority system for determining brightness:
 - Switch ON → Use `brightness_active` (default 80%)
 - Switch OFF → Use `brightness_inactive` (default 10%)
 
-**Priority 2: Dark Outside Sensor** (if configured and no house_active)
-- Dark outside OFF (light outside) → Use `brightness_active`
-- Dark outside ON (dark outside) → Use `brightness_inactive`
+**Priority 2: Ambient Light Sensor** (if configured and no house_active)
+- **Binary sensor**: ON (dark) → Use `brightness_inactive`, OFF (bright) → Use `brightness_active`
+- **Lux sensor**: Below LOW threshold → Use `brightness_inactive`, Above HIGH threshold → Use `brightness_active`
+  - Uses hysteresis (±20 lux gap) to prevent flickering
+  - Default 50 lux → LOW 30 lux, HIGH 70 lux
+  - Maintains current brightness in dead zone (30-70 lux) for stability
 
 **Priority 3: Default** (no switches configured)
 - Always use `brightness_active`
@@ -191,10 +195,35 @@ In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM
 - Motion Sensors: `binary_sensor.kitchen_motion`
 - Ceiling Lights: `light.kitchen_ceiling`
 - Background Lights: `light.kitchen_under_cabinet`
-- Dark Outside: `binary_sensor.sun_below_horizon`
+- Ambient Light Sensor: `binary_sensor.sun_below_horizon`
 - No Motion Wait: `300`
 - Brightness Active: `100` (day mode)
 - Brightness Inactive: `10` (night mode)
+
+**How it works:**
+- When sun is above horizon (sensor OFF), uses bright mode (100%)
+- When sun is below horizon (sensor ON), uses dim mode (10%)
+
+### Example 2a: Kitchen with Lux Sensor
+
+**Goal:** Automatic brightness based on actual room brightness, preventing flickering.
+
+**Configuration:**
+- Motion Sensors: `binary_sensor.kitchen_motion`
+- Ceiling Lights: `light.kitchen_ceiling`
+- Background Lights: `light.kitchen_under_cabinet`
+- Ambient Light Sensor: `sensor.kitchen_illuminance` (lux sensor)
+- Ambient Light Threshold: `50` (lux)
+- No Motion Wait: `300`
+- Brightness Active: `100` (bright mode)
+- Brightness Inactive: `10` (dim mode)
+
+**How it works:**
+- Below 30 lux → Dim mode (10%)
+- 30-70 lux → Maintains current mode (hysteresis dead zone)
+- Above 70 lux → Bright mode (100%)
+
+**Why hysteresis?** Without it, the lights turning on would increase the lux reading, causing the mode to flip back and forth. The ±20 lux gap (40 lux total dead zone) prevents this flickering and also handles clouds passing, car headlights, or other transient light changes.
 
 ### Example 3: Living Room with House Active Mode
 
@@ -309,7 +338,9 @@ ceiling_light: light.kitchen_ceiling
 background_light: light.kitchen_under_cabinet
 override_switch: input_boolean.kitchen_override
 house_active_switch: input_boolean.house_active
-dark_outside_sensor: binary_sensor.sun_below_horizon
+ambient_light_sensor: binary_sensor.sun_below_horizon  # or sensor.kitchen_illuminance
+ambient_light_threshold: 50  # only present for lux sensors
+ambient_light_low: false  # true if below threshold or binary sensor ON
 ```
 
 ---
@@ -341,9 +372,22 @@ dark_outside_sensor: binary_sensor.sun_below_horizon
 ### Brightness Not Changing
 
 **Check:**
-1. House active switch or dark outside sensor is configured
+1. House active switch or ambient light sensor is configured
 2. Sensors are changing states correctly
-3. Check sensor attributes for `current_brightness_mode`
+3. Check sensor attributes for `current_brightness_mode` and `ambient_light_low`
+4. For lux sensors, verify the sensor reports lux values (unit_of_measurement: "lx")
+
+### Lux Sensor Flickering
+
+**Problem:** Brightness keeps switching between active/inactive modes.
+
+**Cause:** The lux sensor value is oscillating around the threshold.
+
+**Solution:**
+1. The integration includes ±20 lux hysteresis to prevent this
+2. If still flickering, adjust the threshold away from typical values
+3. Check if the lux sensor is too close to the lights (sensor should measure ambient light, not direct light from the controlled fixtures)
+4. Consider using a binary sensor (e.g., sun below horizon) instead for simpler on/off behavior
 
 ### Debug Logging
 
@@ -390,7 +434,7 @@ The integration uses a clean, modular architecture:
 
 ### Testing
 
-Comprehensive test coverage with 217 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, and edge cases.
+Comprehensive test coverage with 226 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, ambient light sensor detection with hysteresis, and edge cases.
 
 Run tests:
 ```bash
@@ -433,6 +477,25 @@ uv run ruff format .
 ---
 
 ## Changelog
+
+### 5.2.0
+
+Enhanced **Ambient Light Sensor** support with lux sensor capabilities. The dark_inside sensor field has been renamed to ambient_light_sensor and now supports both binary sensors (backward compatible) and lux sensors with intelligent hysteresis.
+
+**New Features:**
+- **Lux sensor support**: Use illuminance sensors (unit: lx) for ambient light detection
+- **Automatic detection**: Integration auto-detects lux sensors vs binary sensors
+- **Hysteresis algorithm**: ±20 lux gap prevents flickering from light feedback, clouds, or transients
+- **Configurable threshold**: Set lux threshold (10-500, default 50) in advanced settings
+- **Dead zone stability**: 40 lux dead zone maintains current brightness mode for stable operation
+
+**Technical Details:**
+- Default 50 lux threshold → LOW 30 lux, HIGH 70 lux
+- Dim mode stays dim until lux > HIGH (70)
+- Bright mode stays bright until lux < LOW (30)
+- Invalid lux values safely fall back to dim mode
+
+**Migration:** Existing configurations with dark_inside sensors will continue to work. The sensor field has been renamed but retains full backward compatibility for binary sensors.
 
 ### 5.1.0
 
