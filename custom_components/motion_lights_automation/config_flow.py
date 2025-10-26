@@ -6,7 +6,10 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigFlow,
+    ConfigFlowResult,
+)
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -385,6 +388,28 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure_advanced",
             data_schema=get_advanced_schema(config_entry.data),
             description_placeholders={"name": config_entry.title},
+        )
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> ConfigFlowResult:
+        """Handle import from YAML configuration."""
+        _LOGGER.info("Importing Motion Lights Automation from YAML: %s", import_data)
+
+        # Check if already exists by title
+        name = import_data.get(CONF_NAME)
+        await self.async_set_unique_id(name)
+        self._abort_if_unique_id_configured()
+
+        # Validate the imported data
+        try:
+            await validate_input(self.hass, import_data)
+        except (CannotConnect, InvalidConfiguration) as err:
+            _LOGGER.error("Failed to import YAML configuration: %s", err)
+            return self.async_abort(reason="invalid_import")
+
+        # Create the entry
+        return self.async_create_entry(
+            title=name or "Motion Lights Automation",
+            data=import_data,
         )
 
 

@@ -19,6 +19,7 @@ Motion Lights Automation is a Home Assistant integration that provides sophistic
 - ✅ **House active switch** - Control brightness based on home occupancy/activity
 - ✅ **Ambient light sensor** - Adjust brightness using boolean or lux sensors with hysteresis
 - ✅ **Full UI configuration** - No YAML required
+- ✅ **YAML configuration** - Optional YAML support with automatic import
 
 ### Advanced Features
 - 🎯 **Priority brightness logic** - house_active > ambient_light > default active mode
@@ -92,6 +93,112 @@ Fine-tune the behavior:
 | **Brightness Active** | 80% | 0-100% | Brightness when house is active |
 | **Brightness Inactive** | 10% | 0-100% | Brightness when house is inactive |
 | **Ambient Light Threshold** | 50 lux | 10-500 lux | Threshold for lux sensors (only shown if lux sensor configured) |
+
+---
+
+## 📝 YAML Configuration
+
+Motion Lights Automation supports both UI and YAML configuration. You can use either method or mix them.
+
+### Basic YAML Example
+
+```yaml
+motion_lights_automation:
+  - name: "Kitchen Motion Lights"
+    motion_entity:
+      - binary_sensor.kitchen_motion
+    lights:
+      ceiling:
+        - light.kitchen_ceiling
+      background:
+        - light.kitchen_under_cabinet
+```
+
+### Full YAML Example
+
+```yaml
+motion_lights_automation:
+  - name: "Living Room Automation"
+    motion_entity:
+      - binary_sensor.living_room_motion_1
+      - binary_sensor.living_room_motion_2
+    lights:
+      ceiling:
+        - light.living_room_main
+      background:
+        - light.living_room_lamp_1
+        - light.living_room_lamp_2
+      feature:
+        - light.living_room_accent
+    override_switch:
+      - switch.living_room_override
+    house_active:
+      - input_boolean.house_active
+    ambient_light_sensor:
+      - sensor.living_room_illuminance
+    no_motion_wait: 600
+    extended_timeout: 1800
+    motion_delay: 2
+    brightness_active: 90
+    brightness_inactive: 15
+    ambient_light_threshold: 75
+    motion_activation: true
+```
+
+### Multiple Instances
+
+```yaml
+motion_lights_automation:
+  - name: "Bedroom"
+    motion_entity:
+      - binary_sensor.bedroom_motion
+    lights:
+      ceiling:
+        - light.bedroom_ceiling
+
+  - name: "Bathroom"
+    motion_entity:
+      - binary_sensor.bathroom_motion
+    lights:
+      ceiling:
+        - light.bathroom_ceiling
+    no_motion_wait: 180
+```
+
+### YAML Configuration Reference
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | Yes | - | Unique name for this automation |
+| `motion_entity` | list | Yes | - | Motion sensor entities |
+| `lights` | object | Yes | - | Light configuration (see below) |
+| `override_switch` | list | No | - | Override switch entities |
+| `house_active` | list | No | - | House active entities |
+| `ambient_light_sensor` | list | No | - | Ambient light sensor entities |
+| `no_motion_wait` | int | No | 300 | Seconds before lights turn off (0-3600) |
+| `extended_timeout` | int | No | 1200 | Extended timer duration (0-7200) |
+| `motion_delay` | int | No | 0 | Delay before turning on (0-30) |
+| `brightness_active` | int | No | 80 | Active brightness percent (0-100) |
+| `brightness_inactive` | int | No | 10 | Inactive brightness percent (0-100) |
+| `ambient_light_threshold` | int | No | 50 | Lux threshold (10-500) |
+| `motion_activation` | bool | No | true | Enable motion detection |
+
+**Lights configuration:**
+```yaml
+lights:
+  ceiling:  # optional list of ceiling lights
+    - light.entity_1
+  background:  # optional list of background lights
+    - light.entity_2
+  feature:  # optional list of feature lights
+    - light.entity_3
+```
+
+**Notes:**
+- At least one light type (ceiling, background, or feature) must be configured
+- YAML configurations are imported as config entries on Home Assistant startup
+- Duplicate names are prevented - YAML import will skip if a UI entry with the same name exists
+- You can reconfigure YAML entries through the UI after import
 
 ---
 
@@ -434,7 +541,7 @@ The integration uses a clean, modular architecture:
 
 ### Testing
 
-Comprehensive test coverage with 226 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, ambient light sensor detection with hysteresis, and edge cases.
+Comprehensive test coverage with 232 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, ambient light sensor detection with hysteresis, YAML configuration import, and edge cases.
 
 Run tests:
 ```bash
@@ -477,6 +584,30 @@ uv run ruff format .
 ---
 
 ## Changelog
+
+### 5.3.0
+
+Added **YAML Configuration Support**. The integration now supports both UI-based configuration (config flow) and YAML configuration in `configuration.yaml`.
+
+**New Features:**
+- **YAML configuration**: Define instances in `configuration.yaml` with full feature support
+- **Mixed configuration**: Use both YAML and UI configs simultaneously
+- **Automatic import**: YAML configurations are imported as config entries on startup
+- **Duplicate prevention**: YAML imports skip if UI entry with same name exists
+- **Full parity**: All UI options available in YAML (motion sensors, lights, switches, timeouts, brightness)
+
+**Configuration Example:**
+```yaml
+motion_lights_automation:
+  - name: "Kitchen"
+    motion_entity:
+      - binary_sensor.kitchen_motion
+    lights:
+      ceiling:
+        - light.kitchen_ceiling
+```
+
+See the "YAML Configuration" section in the README for complete documentation.
 
 ### 5.2.0
 
