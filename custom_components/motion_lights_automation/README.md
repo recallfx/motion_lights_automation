@@ -36,14 +36,12 @@ The integration uses a two-step configuration process. In the first step, config
 |-------|----------|-------------|
 | **Name** | Yes | Friendly name for this automation (e.g., "Kitchen Motion Lights") |
 | **Motion Sensors** | Yes | One or more motion sensors that trigger the lights |
-| **Ceiling Lights** | No | Main overhead/ceiling lights |
-| **Background Lights** | No | Ambient/background lighting |
-| **Feature Lights** | No | Accent/feature lights |
+| **Lights to Control** | Yes | The lights this automation should control |
 | **Override Switch** | No | Switch to temporarily disable automation |
 | **House Active Switch** | No | Switch indicating house is active (for brightness control) |
 | **Dark Inside Sensor** | No | Binary sensor indicating darkness inside the room |
 
-**Note:** At least one light type (ceiling, background, or feature) must be configured.
+**Note:** At least one light must be configured. Create separate instances if you need different behaviors for different light types.
 
 ### Advanced Settings (Step 2)
 
@@ -811,6 +809,72 @@ automation:
 ---
 
 ## Migration Guides
+
+### From v4.x to v5.0 (Light Groups → Single Light Group)
+
+Version 5.0 simplifies the architecture by combining light groups into a single instance model.
+
+**What Changed:**
+- One integration instance per light group instead of one instance managing multiple groups
+- Single `Lights to Control` field replaces ceiling/background/feature groups
+- Unique ID now includes lights to prevent duplicate instances
+- ~150 lines of complexity removed from light selection logic
+
+**Why This Change:**
+The multi-group approach added unnecessary complexity. Most users wanted either all lights or a subset, not complex layered control. If you need different behaviors for different light types, create separate integration instances.
+
+**Migration Steps:**
+
+1. **Before upgrading:**
+   - Note your current light assignments (ceiling/background/feature)
+   - Take a screenshot of your configuration
+
+2. **After upgrading to v5.0:**
+   - Your existing instance will continue working with all configured lights combined
+   - Reconfigure to adjust the light list if needed
+
+3. **For per-group control:**
+   - Delete your existing instance
+   - Create separate instances for each light group you want to control differently
+   - Example: "Kitchen Ceiling" (controls ceiling lights) + "Kitchen Ambient" (controls background lights)
+
+**Migration Examples:**
+
+**Simple Case (all lights behave the same):**
+```yaml
+# v4.x configuration
+ceiling_lights: [light.ceiling1, light.ceiling2]
+background_lights: [light.strip]
+feature_lights: [light.accent]
+
+# v5.0 configuration (single instance)
+lights: [light.ceiling1, light.ceiling2, light.strip, light.accent]
+```
+
+**Complex Case (different timings for different lights):**
+```yaml
+# v4.x configuration (one instance)
+ceiling_lights: [light.ceiling1, light.ceiling2]
+background_lights: [light.strip]
+no_motion_wait: 300
+
+# v5.0 configuration (two instances)
+Instance 1: "Kitchen Main"
+  lights: [light.ceiling1, light.ceiling2]
+  no_motion_wait: 300
+
+Instance 2: "Kitchen Ambient"
+  lights: [light.strip]
+  no_motion_wait: 600  # Longer timeout for ambient
+```
+
+**Behavior Notes:**
+- All lights in an instance turn on/off together
+- All lights use the same brightness and timing settings
+- Create multiple instances if you need different behaviors
+- Each instance tracks its own state independently
+
+---
 
 ### From Previous Version (Day/Night → Active/Inactive)
 

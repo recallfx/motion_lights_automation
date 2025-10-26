@@ -4,10 +4,7 @@ DOMAIN = "motion_lights_automation"
 
 # Configuration keys
 CONF_MOTION_ENTITY = "motion_entity"
-CONF_BACKGROUND_LIGHT = "background_light"
-CONF_FEATURE_LIGHT = "feature_light"
-CONF_CEILING_LIGHT = "ceiling_light"
-CONF_COMBINED_LIGHT = "combined_light"  # Legacy, to be removed
+CONF_LIGHTS = "lights"
 CONF_NO_MOTION_WAIT = "no_motion_wait"
 CONF_OVERRIDE_SWITCH = "override_switch"
 CONF_BRIGHTNESS_ACTIVE = "brightness_active"  # Brightness when house/room is active

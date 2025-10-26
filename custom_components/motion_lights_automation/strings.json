@@ -7,20 +7,18 @@
         "data": {
           "name": "Automation Name",
           "motion_entity": "Motion Sensor",
-          "ceiling_lights": "Ceiling Lights (optional)",
-          "background_lights": "Background Lights (optional)",
-          "feature_lights": "Feature Lights (optional)",
+          "lights": "Lights to Control",
           "override_switch": "Override Switch",
-          "dark_inside": "Dark Inside (optional)"
+          "dark_inside": "Dark Inside (optional)",
+          "house_active": "House Active (optional)"
         },
         "data_description": {
-          "name": "A unique name for this motion lights automation",
-          "motion_entity": "Binary sensor that detects motion",
-          "ceiling_lights": "Main ceiling lights to control",
-          "background_lights": "Background/accent lights to control",
-          "feature_lights": "Feature/decorative lights to control",
+          "name": "A unique name for this motion lights automation instance",
+          "motion_entity": "Binary sensor(s) that detect motion",
+          "lights": "The lights this automation should control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
+          "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
         }
       },
       "advanced": {
@@ -28,31 +26,17 @@
         "description": "Configure advanced settings and timing options",
         "data": {
           "motion_activation": "Enable Motion Detection",
-          "gradual_fade": "Enable Gradual Brightness Fade",
           "extended_timeout": "Extended Timeout (seconds)",
-          "fade_rate": "Fade Rate (% per minute)",
-          "windowless_room": "Windowless Room",
           "no_motion_wait": "Motion Wait Time (seconds)",
-          "brightness_day": "Day Brightness (%)",
-          "brightness_night": "Night Brightness (%)",
-          "gradual_switch_off": "Gradual Switch Off (legacy)",
-          "ceiling_delay": "Ceiling Lights Delay (seconds)",
-          "feature_delay": "Feature Lights Delay (seconds)",
-          "background_delay": "Background Lights Delay (seconds)"
+          "brightness_active": "Active Brightness (%)",
+          "brightness_inactive": "Inactive Brightness (%)"
         },
         "data_description": {
           "motion_activation": "Enable automatic light control based on motion detection",
-          "gradual_fade": "Gradually reduce brightness when no motion for extended time",
-          "extended_timeout": "Time before gradual fade starts (300-7200 seconds)",
-          "fade_rate": "Brightness reduction percentage per minute (1-10%)",
-          "windowless_room": "Enable to ignore time-based control for windowless rooms",
-          "no_motion_wait": "Time to wait after motion stops before turning off lights",
-          "brightness_day": "Brightness level during day hours (0-100%)",
-          "brightness_night": "Brightness level during night hours (0-100%)",
-          "gradual_switch_off": "Legacy: Switch off light groups gradually instead of all at once",
-          "ceiling_delay": "Delay before turning off ceiling lights (when gradual switch off is enabled)",
-          "feature_delay": "Delay before turning off feature lights (when gradual switch off is enabled)",
-          "background_delay": "Delay before turning off background lights (when gradual switch off is enabled)"
+          "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
+          "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
+          "brightness_active": "Brightness level when house is active (0-100%)",
+          "brightness_inactive": "Brightness level when house is inactive (0-100%)"
         }
       },
       "reconfigure": {
@@ -61,20 +45,18 @@
         "data": {
           "name": "Automation Name",
           "motion_entity": "Motion Sensor",
-          "ceiling_lights": "Ceiling Lights (optional)",
-          "background_lights": "Background Lights (optional)",
-          "feature_lights": "Feature Lights (optional)",
+          "lights": "Lights to Control",
           "override_switch": "Override Switch",
-          "dark_inside": "Dark Inside (optional)"
+          "dark_inside": "Dark Inside (optional)",
+          "house_active": "House Active (optional)"
         },
         "data_description": {
-          "name": "A unique name for this motion lights automation",
-          "motion_entity": "Binary sensor that detects motion",
-          "ceiling_lights": "Main ceiling lights to control",
-          "background_lights": "Background/accent lights to control",
-          "feature_lights": "Feature/decorative lights to control",
+          "name": "A unique name for this motion lights automation instance",
+          "motion_entity": "Binary sensor(s) that detect motion",
+          "lights": "The lights this automation should control",
           "override_switch": "Switch to enable/disable automation",
-          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day."
+          "dark_inside": "If set, this determines night/day (ON=night). If not set, always day.",
+          "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
         }
       },
       "reconfigure_advanced": {
@@ -82,37 +64,23 @@
         "description": "Update the advanced configuration for {name}",
         "data": {
           "motion_activation": "Enable Motion Detection",
-          "gradual_fade": "Enable Gradual Brightness Fade",
           "extended_timeout": "Extended Timeout (seconds)",
-          "fade_rate": "Fade Rate (% per minute)",
-          "windowless_room": "Windowless Room",
           "no_motion_wait": "Motion Wait Time (seconds)",
-          "brightness_day": "Day Brightness (%)",
-          "brightness_night": "Night Brightness (%)",
-          "gradual_switch_off": "Gradual Switch Off (legacy)",
-          "ceiling_delay": "Ceiling Lights Delay (seconds)",
-          "feature_delay": "Feature Lights Delay (seconds)",
-          "background_delay": "Background Lights Delay (seconds)"
+          "brightness_active": "Active Brightness (%)",
+          "brightness_inactive": "Inactive Brightness (%)"
         },
         "data_description": {
           "motion_activation": "Enable automatic light control based on motion detection",
-          "gradual_fade": "Gradually reduce brightness when no motion for extended time",
-          "extended_timeout": "Time before gradual fade starts (300-7200 seconds)",
-          "fade_rate": "Brightness reduction percentage per minute (1-10%)",
-          "windowless_room": "Enable to ignore time-based control for windowless rooms",
-          "no_motion_wait": "Time to wait after motion stops before turning off lights",
-          "brightness_day": "Brightness level during day hours (0-100%)",
-          "brightness_night": "Brightness level during night hours (0-100%)",
-          "gradual_switch_off": "Legacy: Switch off light groups gradually instead of all at once",
-          "ceiling_delay": "Delay before turning off ceiling lights (when gradual switch off is enabled)",
-          "feature_delay": "Delay before turning off feature lights (when gradual switch off is enabled)",
-          "background_delay": "Delay before turning off background lights (when gradual switch off is enabled)"
+          "extended_timeout": "Time before lights turn off when manually controlled (300-7200 seconds)",
+          "no_motion_wait": "Time to wait after motion stops before turning off lights (0-3600 seconds)",
+          "brightness_active": "Brightness level when house is active (0-100%)",
+          "brightness_inactive": "Brightness level when house is inactive (0-100%)"
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect to entity",
-      "invalid_config": "At least one light group must be configured",
+      "invalid_config": "At least one light must be configured",
       "unknown": "Unknown error occurred"
     },
     "abort": {

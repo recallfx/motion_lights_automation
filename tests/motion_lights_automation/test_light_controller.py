@@ -9,10 +9,8 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from custom_components.motion_lights_automation.light_controller import (
     BrightnessStrategy,
     LightController,
-    LightSelectionStrategy,
     LightState,
     TimeOfDayBrightnessStrategy,
-    TimeOfDayLightSelectionStrategy,
 )
 
 
@@ -92,66 +90,19 @@ class TestBrightnessStrategy:
         assert brightness == 75
 
 
-class TestLightSelectionStrategy:
-    """Test light selection strategies."""
-
-    def test_time_of_day_selection_day(self):
-        """Test TimeOfDayLightSelectionStrategy for day."""
-        strategy = TimeOfDayLightSelectionStrategy()
-        lights = {
-            "ceiling": ["light.c1", "light.c2"],
-            "background": ["light.bg"],
-            "feature": ["light.f1"],
-        }
-
-        selected = strategy.select_lights(lights, {"is_night": False})
-        assert "light.c1" in selected
-        assert "light.c2" in selected
-        assert "light.bg" in selected
-        assert "light.f1" in selected
-
-    def test_time_of_day_selection_night(self):
-        """Test TimeOfDayLightSelectionStrategy for dark inside and inactive house."""
-        strategy = TimeOfDayLightSelectionStrategy()
-        lights = {
-            "ceiling": ["light.c1"],
-            "background": ["light.bg"],
-        }
-
-        selected = strategy.select_lights(
-            lights, {"is_house_active": False, "is_dark_inside": True}
-        )
-        assert selected == ["light.bg"]
-        assert "light.c1" not in selected
-
-    def test_custom_selection_strategy(self):
-        """Test custom selection strategy."""
-
-        class CustomStrategy(LightSelectionStrategy):
-            def select_lights(self, all_lights, context):
-                return ["light.custom"]
-
-        strategy = CustomStrategy()
-        selected = strategy.select_lights({}, {})
-        assert selected == ["light.custom"]
-
-
 class TestLightController:
     """Test LightController class."""
 
     def test_light_controller_creation(self, hass: HomeAssistant):
         """Test LightController creation."""
-        light_groups = {"ceiling": ["light.c1"], "background": ["light.bg"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.bg"]
+        controller = LightController(hass, lights)
         assert controller is not None
 
     def test_get_all_lights(self, hass: HomeAssistant):
         """Test get_all_lights method."""
-        light_groups = {
-            "ceiling": ["light.c1", "light.c2"],
-            "background": ["light.bg"],
-        }
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         all_lights = controller.get_all_lights()
         assert "light.c1" in all_lights
@@ -160,15 +111,13 @@ class TestLightController:
         assert len(all_lights) == 3
 
     def test_get_all_lights_removes_duplicates(self, hass: HomeAssistant):
-        """Test get_all_lights removes duplicates."""
-        light_groups = {
-            "ceiling": ["light.c1", "light.c1"],
-            "background": ["light.c1"],
-        }
-        controller = LightController(hass, light_groups)
+        """Test get_all_lights doesn't deduplicate (flat list behavior)."""
+        lights = ["light.c1", "light.c1", "light.c1"]
+        controller = LightController(hass, lights)
 
         all_lights = controller.get_all_lights()
-        assert all_lights.count("light.c1") == 1
+        # With flat list, duplicates are preserved (user's responsibility to avoid)
+        assert all_lights.count("light.c1") == 3
 
     def test_update_light_state(self, hass: HomeAssistant):
         """Test update_light_state method."""
@@ -218,8 +167,8 @@ class TestLightController:
 
     def test_refresh_all_states(self, hass: HomeAssistant):
         """Test refresh_all_states method."""
-        light_groups = {"ceiling": ["light.c1", "light.c2"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         # Mock states directly
         mock_state = MagicMock()
@@ -237,8 +186,8 @@ class TestLightController:
 
     async def test_turn_on_auto_lights(self, hass: HomeAssistant):
         """Test turn_on_auto_lights method."""
-        light_groups = {"ceiling": ["light.c1"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         # Set state in hass
         hass.states.async_set("light.c1", "off", {})
@@ -254,26 +203,26 @@ class TestLightController:
         assert calls[0].service == "turn_on"
 
     async def test_turn_on_auto_lights_skips_already_on(self, hass: HomeAssistant):
-        """Test turn_on_auto_lights skips already-on lights."""
-        light_groups = {"ceiling": ["light.c1"]}
-        controller = LightController(hass, light_groups)
+        """Test turn_on_auto_lights skips lights at correct brightness."""
+        lights = ["light.c1"]
+        controller = LightController(hass, lights)
 
-        # Set light already on
-        hass.states.async_set("light.c1", "on", {"brightness": 128})
+        # Set light already on at default brightness (204 = 80%)
+        hass.states.async_set("light.c1", "on", {"brightness": 204})
 
         # Mock the light service
         calls = async_mock_service(hass, "light", "turn_on")
 
-        turned_on = await controller.turn_on_auto_lights({"is_night": False})
+        turned_on = await controller.turn_on_auto_lights({"is_house_active": True})
 
-        # Should not turn on already-on lights
+        # Should not turn on lights already at correct brightness (within 5%)
         assert len(turned_on) == 0
         assert len(calls) == 0
 
     async def test_turn_off_lights(self, hass: HomeAssistant):
         """Test turn_off_lights method."""
-        light_groups = {"ceiling": ["light.c1"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         # Set light on
         hass.states.async_set("light.c1", "on", {"brightness": 128})
@@ -290,8 +239,8 @@ class TestLightController:
 
     async def test_turn_off_lights_skips_already_off(self, hass: HomeAssistant):
         """Test turn_off_lights skips already-off lights."""
-        light_groups = {"ceiling": ["light.c1"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         # Set light already off
         hass.states.async_set("light.c1", "off", {})
@@ -315,29 +264,20 @@ class TestLightController:
 
         assert controller._brightness_strategy == new_strategy
 
-    def test_set_light_selection_strategy(self, hass: HomeAssistant):
-        """Test set_light_selection_strategy method."""
-        controller = LightController(hass, {})
-
-        new_strategy = TimeOfDayLightSelectionStrategy()
-        controller.set_light_selection_strategy(new_strategy)
-
-        assert controller._light_selection_strategy == new_strategy
-
     def test_get_info(self, hass: HomeAssistant):
         """Test get_info method."""
-        light_groups = {"ceiling": ["light.c1"], "background": ["light.bg"]}
-        controller = LightController(hass, light_groups)
+        lights = ["light.c1", "light.c2", "light.bg"]
+        controller = LightController(hass, lights)
 
         info = controller.get_info()
-        assert "light_groups" in info
+        assert "lights" in info
         assert "total_lights" in info
         assert "lights_on" in info
-        assert info["total_lights"] == 2
+        assert info["total_lights"] == 3  # Updated from 2 to 3 (all lights in list)
 
     def test_cleanup_old_contexts(self, hass: HomeAssistant):
         """Test cleanup_old_contexts method."""
-        controller = LightController(hass, {})
+        controller = LightController(hass, [])
 
         # Add many contexts
         for i in range(150):

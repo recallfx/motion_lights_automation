@@ -14,14 +14,12 @@ from homeassistant.helpers.entity_registry import EntityRegistry
 
 # Import from custom component instead of homeassistant.components
 from custom_components.motion_lights_automation.const import (
-    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_CEILING_LIGHT,
     CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
-    CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -42,9 +40,7 @@ def mock_config_data() -> dict[str, Any]:
     return {
         CONF_NAME: "Test Motion Lights",
         CONF_MOTION_ENTITY: ["binary_sensor.motion_sensor"],
-        CONF_BACKGROUND_LIGHT: ["light.background"],
-        CONF_FEATURE_LIGHT: ["light.feature"],
-        CONF_CEILING_LIGHT: ["light.ceiling"],
+        CONF_LIGHTS: ["light.background", "light.feature", "light.ceiling"],
         CONF_OVERRIDE_SWITCH: "switch.override",
         CONF_NO_MOTION_WAIT: DEFAULT_NO_MOTION_WAIT,
         CONF_BRIGHTNESS_ACTIVE: DEFAULT_BRIGHTNESS_ACTIVE,
@@ -85,9 +81,7 @@ def mock_motion_coordinator() -> MagicMock:
     coordinator.no_motion_wait_seconds = DEFAULT_NO_MOTION_WAIT
     coordinator.extended_timeout = DEFAULT_EXTENDED_TIMEOUT
     coordinator.motion_entity = "binary_sensor.motion_sensor"
-    coordinator.background_light_entity = "light.background"
-    coordinator.feature_light_entity = "light.feature"
-    coordinator.ceiling_light_entity = "light.ceiling"
+    coordinator.lights = ["light.background", "light.feature", "light.ceiling"]
     coordinator.override_switch = "switch.override"
     coordinator.dark_inside = "switch.dark_inside"
     coordinator.house_active = "switch.house_active"

@@ -60,7 +60,7 @@ Each component operates independently with clear interfaces between them.
 |--------|----------------|-----------------|
 | `state_machine.py` | State transitions (IDLE → MOTION_AUTO → AUTO → etc) | Add states/transitions |
 | `timer_manager.py` | Timer lifecycle (start/stop/extend) | Add timer types |
-| `light_controller.py` | Light control with pluggable strategies | Implement `BrightnessStrategy` or `LightSelectionStrategy` |
+| `light_controller.py` | Light control with pluggable brightness strategies | Implement `BrightnessStrategy` |
 | `triggers.py` | Event detection (motion, override, etc) | Implement `TriggerHandler` |
 | `manual_detection.py` | Detect user interventions | Implement detection strategy |
 
@@ -88,17 +88,17 @@ class PresenceTrigger(TriggerHandler):
 trigger_manager.add_trigger("presence", PresenceTrigger(hass))
 ```
 
-### 3. Add Scene Selection (5 min)
+### 3. Custom Manual Detection (10 min)
 ```python
-class SceneSelectionStrategy(LightSelectionStrategy):
-    def select_lights(self, context):
-        if context.time_of_day == "night":
-            return ["light.bedroom_path"]  # Only path lights
-        return context.all_lights  # All lights during day
+class SmartManualDetection(ManualInterventionStrategy):
+    def is_manual_intervention(self, context):
+        # Don't treat small brightness adjustments as manual
+        if abs(context.old_brightness - context.new_brightness) < 10:
+            return (False, "brightness_tolerance")
+        return (True, "user_intervention")
 
-light_controller.set_selection_strategy(SceneSelectionStrategy())
+coordinator._manual_detection.set_strategy(SmartManualDetection())
 ```
-
 ### 4. Add Door Sensor Trigger (5 min)
 ```python
 class DoorTrigger(TriggerHandler):

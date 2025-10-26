@@ -11,13 +11,12 @@ from homeassistant.data_entry_flow import FlowResultType
 
 # Import from const (standalone module without relative imports)
 from custom_components.motion_lights_automation.const import (
-    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_CEILING_LIGHT,
     CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
-    CONF_FEATURE_LIGHT,
+    CONF_HOUSE_ACTIVE,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -90,9 +89,7 @@ class TestUserFlow:
             user_input={
                 CONF_NAME: "Full Config",
                 CONF_MOTION_ENTITY: ["binary_sensor.motion1", "binary_sensor.motion2"],
-                CONF_BACKGROUND_LIGHT: ["light.bg1", "light.bg2"],
-                CONF_FEATURE_LIGHT: ["light.feature"],
-                CONF_CEILING_LIGHT: ["light.ceiling"],
+                CONF_LIGHTS: ["light.bg1", "light.bg2", "light.feature", "light.ceiling"],
                 CONF_OVERRIDE_SWITCH: "switch.override",
                 CONF_DARK_INSIDE: "binary_sensor.dark",
             },
@@ -240,6 +237,10 @@ class TestReconfigureFlow:
         hass.states.async_set("binary_sensor.m1", "off")
         hass.states.async_set("light.ceiling1", "off")
 
+        # Set up entities
+        hass.states.async_set("binary_sensor.m1", "off")
+        hass.states.async_set("light.ceiling1", "off")
+
         # Create initial entry
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}
@@ -249,6 +250,7 @@ class TestReconfigureFlow:
             user_input={
                 CONF_NAME: "Original",
                 CONF_MOTION_ENTITY: ["binary_sensor.m1"],
+                CONF_LIGHTS: ["light.ceiling1"],  # Include lights initially
             },
         )
         result = await hass.config_entries.flow.async_configure(
@@ -264,13 +266,13 @@ class TestReconfigureFlow:
             context={"source": "reconfigure", "entry_id": entry_id},
         )
 
-        # Update basic settings - keep same name and motion sensor to avoid unique_id mismatch
+        # Update basic settings - keep same name, motion sensor, and lights to avoid unique_id mismatch
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={
                 CONF_NAME: "Original",  # Keep same name
                 CONF_MOTION_ENTITY: ["binary_sensor.m1"],  # Keep same motion sensor
-                CONF_CEILING_LIGHT: ["light.ceiling1"],  # Add ceiling light
+                CONF_LIGHTS: ["light.ceiling1"],  # Keep same lights
             },
         )
 

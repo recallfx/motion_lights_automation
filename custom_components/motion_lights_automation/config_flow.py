@@ -13,14 +13,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_CEILING_LIGHT,
     CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
-    CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -53,9 +51,7 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
         return []
 
     motion_default = _as_list(data.get(CONF_MOTION_ENTITY)) if data else []
-    bg_default = _as_list(data.get(CONF_BACKGROUND_LIGHT)) if data else []
-    feat_default = _as_list(data.get(CONF_FEATURE_LIGHT)) if data else []
-    ceil_default = _as_list(data.get(CONF_CEILING_LIGHT)) if data else []
+    lights_default = _as_list(data.get(CONF_LIGHTS)) if data else []
 
     # For optional single-entity selectors, only set default if data exists AND has a value
     schema_dict = {
@@ -71,20 +67,8 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
             )
         ),
         vol.Optional(
-            CONF_BACKGROUND_LIGHT,
-            default=bg_default,
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="light", multiple=True)
-        ),
-        vol.Optional(
-            CONF_FEATURE_LIGHT,
-            default=feat_default,
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="light", multiple=True)
-        ),
-        vol.Optional(
-            CONF_CEILING_LIGHT,
-            default=ceil_default,
+            CONF_LIGHTS,
+            default=lights_default,
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="light", multiple=True)
         ),
@@ -198,10 +182,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         return []
 
     # Validate provided lights (optional; only validate if user set them)
-    for key in (CONF_BACKGROUND_LIGHT, CONF_FEATURE_LIGHT, CONF_CEILING_LIGHT):
-        for ent in _as_list(data.get(key)):
-            if not hass.states.get(ent):
-                raise CannotConnect(f"Light entity {ent} not found")
+    for ent in _as_list(data.get(CONF_LIGHTS)):
+        if not hass.states.get(ent):
+            raise CannotConnect(f"Light entity {ent} not found")
 
     # Validate provided motion sensors (optional)
     for ent in _as_list(data.get(CONF_MOTION_ENTITY)):
@@ -268,7 +251,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             # Merge basic and advanced config
             config_data = {**self._basic_config, **user_input}
 
-            # Create unique ID based on motion entity and name
+            # Create unique ID based on lights and motion entities
             def _normalize_list(val: Any) -> list[str]:
                 if val is None:
                     return []
@@ -278,10 +261,14 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                     return [str(v) for v in val]
                 return []
 
+            lights_list = sorted(_normalize_list(config_data.get(CONF_LIGHTS)))
             motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
             name = config_data.get(CONF_NAME) or DOMAIN
+            
+            # Include lights in unique ID to prevent same lights in multiple instances
+            lights_key = "|".join(lights_list) if lights_list else "no-lights"
             motion_key = "|".join(motion_list) if motion_list else "no-motion"
-            unique_id = f"{name}:{motion_key}"
+            unique_id = f"{name}:{lights_key}:{motion_key}"
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
@@ -339,7 +326,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             # Merge basic and advanced config
             config_data = {**self._basic_config, **user_input}
 
-            # Check if the motion entity or name changed - if so, update unique ID
+            # Check if the lights or motion entity changed - if so, update unique ID
             old_unique_id = config_entry.unique_id
 
             def _normalize_list(val: Any) -> list[str]:
@@ -351,10 +338,13 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                     return [str(v) for v in val]
                 return []
 
+            lights_list = sorted(_normalize_list(config_data.get(CONF_LIGHTS)))
             motion_list = sorted(_normalize_list(config_data.get(CONF_MOTION_ENTITY)))
             name = config_data.get(CONF_NAME) or DOMAIN
+            
+            lights_key = "|".join(lights_list) if lights_list else "no-lights"
             motion_key = "|".join(motion_list) if motion_list else "no-motion"
-            new_unique_id = f"{name}:{motion_key}"
+            new_unique_id = f"{name}:{lights_key}:{motion_key}"
 
             if old_unique_id != new_unique_id:
                 await self.async_set_unique_id(new_unique_id)

@@ -83,59 +83,8 @@ class TimeOfDayBrightnessStrategy(BrightnessStrategy):
         return self.active_brightness if is_house_active else self.inactive_brightness
 
 
-class LightSelectionStrategy(ABC):
-    """Abstract base class for light selection strategies.
-
-    Implement this interface to create custom light selection logic
-    (e.g., progressive lighting, zone-based control, activity-based selection).
-    """
-
-    @abstractmethod
-    def select_lights(
-        self,
-        all_lights: dict[str, list[str]],
-        context: dict[str, Any],
-    ) -> list[str]:
-        """Select which lights to turn on.
-
-        Args:
-            all_lights: Dictionary of light groups, e.g.:
-                {"ceiling": [...], "background": [...], "feature": [...]}
-            context: Contextual information for selection
-
-        Returns:
-            List of entity_ids to turn on
-        """
-        pass
-
-
-class TimeOfDayLightSelectionStrategy(LightSelectionStrategy):
-    """Default strategy that selects lights based on time of day."""
-
-    def select_lights(
-        self,
-        all_lights: dict[str, list[str]],
-        context: dict[str, Any],
-    ) -> list[str]:
-        """Select background lights when it's dark inside, all lights during day."""
-        is_dark_inside = context.get("is_dark_inside", True)
-        is_house_active = context.get("is_house_active", True)
-
-        if not is_house_active and is_dark_inside:
-            # House inactive and dark inside: only background lights
-            return all_lights.get("background", [])
-        elif is_house_active and is_dark_inside:
-            # House active and dark inside: all configured lights
-            selected = []
-            for group in all_lights.values():
-                selected.extend(group)
-            return selected
-
-        return []
-
-
 class LightController:
-    """Controls lights with flexible strategies for brightness and selection.
+    """Controls lights with flexible strategies for brightness.
 
     This class provides a clean interface for light control that can be easily
     extended with different control strategies, transition effects, etc.
@@ -144,11 +93,6 @@ class LightController:
     1. Create a class inheriting from BrightnessStrategy
     2. Implement get_brightness() method
     3. Set it with set_brightness_strategy()
-
-    To add a new light selection strategy:
-    1. Create a class inheriting from LightSelectionStrategy
-    2. Implement select_lights() method
-    3. Set it with set_light_selection_strategy()
 
     Future extensions could include:
     - Transition effects (fade in/out, color transitions)
@@ -160,27 +104,21 @@ class LightController:
     def __init__(
         self,
         hass: HomeAssistant,
-        light_groups: dict[str, list[str]],
+        lights: list[str],
         brightness_strategy: BrightnessStrategy | None = None,
-        light_selection_strategy: LightSelectionStrategy | None = None,
     ):
         """Initialize the light controller.
 
         Args:
             hass: HomeAssistant instance
-            light_groups: Dictionary of light groups, e.g.:
-                {"ceiling": [...], "background": [...], "feature": [...]}
+            lights: List of light entity IDs to control
             brightness_strategy: Strategy for determining brightness
-            light_selection_strategy: Strategy for selecting which lights to control
         """
         self.hass = hass
-        self.light_groups = light_groups
+        self.lights = lights
 
-        # Set default strategies if not provided
+        # Set default strategy if not provided
         self._brightness_strategy = brightness_strategy or TimeOfDayBrightnessStrategy()
-        self._light_selection_strategy = (
-            light_selection_strategy or TimeOfDayLightSelectionStrategy()
-        )
 
         # Track light states
         self._light_states: dict[str, LightState] = {}
@@ -191,23 +129,9 @@ class LightController:
         self._brightness_strategy = strategy
         _LOGGER.debug("Updated brightness strategy to %s", type(strategy).__name__)
 
-    def set_light_selection_strategy(self, strategy: LightSelectionStrategy) -> None:
-        """Set the light selection strategy."""
-        self._light_selection_strategy = strategy
-        _LOGGER.debug("Updated light selection strategy to %s", type(strategy).__name__)
-
     def get_all_lights(self) -> list[str]:
         """Get all configured light entity IDs."""
-        all_lights = []
-        for group in self.light_groups.values():
-            all_lights.extend(group)
-        # Remove duplicates while preserving order
-        seen = set()
-        return [
-            light
-            for light in all_lights
-            if light not in seen and not seen.add(light)  # type: ignore
-        ]
+        return list(self.lights)
 
     def update_light_state(self, entity_id: str, state) -> LightState:
         """Update tracked state for a light from HA state object."""
@@ -231,53 +155,51 @@ class LightController:
                 self.update_light_state(light_id, state)
 
     async def turn_on_auto_lights(self, context_data: dict[str, Any]) -> list[str]:
-        """Turn on lights automatically based on strategies.
+        """Turn on lights automatically based on brightness strategy.
 
         Args:
-            context_data: Context for strategies (e.g., is_dark_inside, motion_count)
+            context_data: Context for strategy (e.g., is_dark_inside, is_house_active)
 
         Returns:
             List of entity IDs that were turned on
         """
-        # Select which lights to turn on
-        selected_lights = self._light_selection_strategy.select_lights(
-            self.light_groups,
-            context_data,
-        )
-
-        if not selected_lights:
-            _LOGGER.debug("No lights selected by strategy")
-            return []
-
-        # Determine target brightness
+        # Determine brightness based on strategy
         target_brightness = self._brightness_strategy.get_brightness(context_data)
 
-        if target_brightness == 0:
-            _LOGGER.debug("Target brightness is 0%%, not turning on lights")
+        if target_brightness <= 0:
+            _LOGGER.debug("Brightness strategy returned 0, no lights will be turned on")
             return []
 
-        _LOGGER.info(
-            "Auto-turning on %d lights at %d%% brightness",
-            len(selected_lights),
-            target_brightness,
-        )
-
-        # Turn on each light
+        # Turn on all configured lights
         turned_on = []
-        for light_id in selected_lights:
+        for light_id in self.lights:
             current_state = self.hass.states.get(light_id)
             if not current_state:
                 _LOGGER.warning("Light %s not found", light_id)
                 continue
 
-            # Skip if already on
+            # Skip if already on at correct brightness
             if current_state.state == "on":
-                _LOGGER.debug("Light %s already on, skipping", light_id)
-                continue
+                current_brightness = current_state.attributes.get("brightness", 0)
+                current_brightness_pct = int(current_brightness * 100 / 255) if current_brightness else 0
+                if abs(current_brightness_pct - target_brightness) < 5:
+                    _LOGGER.debug(
+                        "Light %s already on at correct brightness (%d%%)",
+                        light_id,
+                        current_brightness_pct,
+                    )
+                    continue
 
             # Turn on the light
             if await self._async_set_light(light_id, "on", target_brightness):
                 turned_on.append(light_id)
+
+        if turned_on:
+            _LOGGER.info(
+                "Turned on %d light(s) at %d%% brightness",
+                len(turned_on),
+                target_brightness,
+            )
 
         return turned_on
 
@@ -291,7 +213,7 @@ class LightController:
             List of entity IDs that were turned off
         """
         if light_ids is None:
-            light_ids = self.get_all_lights()
+            light_ids = self.lights
 
         turned_off = []
         for light_id in light_ids:
@@ -385,14 +307,10 @@ class LightController:
     def get_info(self) -> dict[str, Any]:
         """Get diagnostic information."""
         return {
-            "light_groups": {
-                group_name: list(lights)
-                for group_name, lights in self.light_groups.items()
-            },
-            "total_lights": len(self.get_all_lights()),
+            "lights": list(self.lights),
+            "total_lights": len(self.lights),
             "lights_on": sum(1 for state in self._light_states.values() if state.is_on),
             "brightness_strategy": type(self._brightness_strategy).__name__,
-            "selection_strategy": type(self._light_selection_strategy).__name__,
             "tracked_states": {
                 entity_id: {
                     "is_on": state.is_on,

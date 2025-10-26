@@ -9,8 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from custom_components.motion_lights_automation.const import (
-    CONF_BACKGROUND_LIGHT,
     CONF_EXTENDED_TIMEOUT,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     DOMAIN,
@@ -29,7 +29,7 @@ def mock_config_data_motion_disabled():
     """Return config with motion_activation disabled."""
     return {
         CONF_MOTION_ENTITY: ["binary_sensor.motion"],
-        CONF_BACKGROUND_LIGHT: ["light.background"],
+        CONF_LIGHTS: ["light.background"],
         CONF_MOTION_ACTIVATION: False,  # Motion activation disabled
         CONF_EXTENDED_TIMEOUT: 1200,  # 20 minutes
     }
@@ -50,7 +50,7 @@ async def test_motion_activation_disabled_prevents_auto_light_on(
         title="Test Motion Lights",
         data={
             CONF_MOTION_ENTITY: ["binary_sensor.motion"],
-            CONF_BACKGROUND_LIGHT: ["light.background"],
+            CONF_LIGHTS: ["light.background"],
             CONF_MOTION_ACTIVATION: False,
             CONF_EXTENDED_TIMEOUT: 1200,
         },
@@ -95,7 +95,7 @@ async def test_motion_activation_disabled_resets_timer_in_manual_state(
         title="Test Motion Lights",
         data={
             CONF_MOTION_ENTITY: ["binary_sensor.motion"],
-            CONF_BACKGROUND_LIGHT: ["light.background"],
+            CONF_LIGHTS: ["light.background"],
             CONF_MOTION_ACTIVATION: False,
             CONF_EXTENDED_TIMEOUT: 1200,
         },
@@ -155,7 +155,7 @@ async def test_motion_keeps_resetting_timer_preventing_shutoff(
         title="Test Motion Lights",
         data={
             CONF_MOTION_ENTITY: ["binary_sensor.motion"],
-            CONF_BACKGROUND_LIGHT: ["light.background"],
+            CONF_LIGHTS: ["light.background"],
             CONF_MOTION_ACTIVATION: False,
             CONF_EXTENDED_TIMEOUT: 60,  # 1 minute for testing
         },
@@ -218,7 +218,7 @@ async def test_motion_activation_disabled_resets_timer_in_manual_off_state(
         title="Test Motion Lights",
         data={
             CONF_MOTION_ENTITY: ["binary_sensor.motion"],
-            CONF_BACKGROUND_LIGHT: ["light.background"],
+            CONF_LIGHTS: ["light.background"],
             CONF_MOTION_ACTIVATION: False,
             CONF_EXTENDED_TIMEOUT: 1200,
         },

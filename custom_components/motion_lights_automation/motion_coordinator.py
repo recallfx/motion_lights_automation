@@ -11,14 +11,12 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    CONF_BACKGROUND_LIGHT,
     CONF_BRIGHTNESS_ACTIVE,
     CONF_BRIGHTNESS_INACTIVE,
-    CONF_CEILING_LIGHT,
     CONF_DARK_INSIDE,
     CONF_EXTENDED_TIMEOUT,
-    CONF_FEATURE_LIGHT,
     CONF_HOUSE_ACTIVE,
+    CONF_LIGHTS,
     CONF_MOTION_ACTIVATION,
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
@@ -40,7 +38,6 @@ from .const import (
 from .light_controller import (
     LightController,
     TimeOfDayBrightnessStrategy,
-    TimeOfDayLightSelectionStrategy,
 )
 from .manual_detection import BrightnessThresholdStrategy, ManualInterventionDetector
 from .state_machine import MotionLightsStateMachine, StateTransitionEvent
@@ -74,20 +71,15 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.timer_manager = TimerManager(hass)
         self.trigger_manager = TriggerManager(hass)
 
-        # Light controller with strategies
-        light_groups = {
-            "ceiling": self.ceiling_lights,
-            "background": self.background_lights,
-            "feature": self.feature_lights,
-        }
+        # Light controller with brightness strategy
+        lights = self._lights
         self.light_controller = LightController(
             hass,
-            light_groups,
+            lights,
             brightness_strategy=TimeOfDayBrightnessStrategy(
                 active_brightness=self.brightness_active,
                 inactive_brightness=self.brightness_inactive,
             ),
-            light_selection_strategy=TimeOfDayLightSelectionStrategy(),
         )
 
         # Manual intervention detector
@@ -148,9 +140,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         # Lights
-        self.background_lights = _as_list(data.get(CONF_BACKGROUND_LIGHT))
-        self.feature_lights = _as_list(data.get(CONF_FEATURE_LIGHT))
-        self.ceiling_lights = _as_list(data.get(CONF_CEILING_LIGHT))
+        self._lights = _as_list(data.get(CONF_LIGHTS))
 
     async def async_setup_listeners(self) -> None:
         """Set up the coordinator - wire modules together."""
@@ -717,16 +707,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self.motion_entities[0] if self.motion_entities else ""
 
     @property
-    def background_light(self) -> str:
-        return self.background_lights[0] if self.background_lights else ""
-
-    @property
-    def feature_light(self) -> str:
-        return self.feature_lights[0] if self.feature_lights else ""
-
-    @property
-    def ceiling_light(self) -> str:
-        return self.ceiling_lights[0] if self.ceiling_lights else ""
+    def lights(self) -> list[str]:
+        """Return list of all configured light entity IDs."""
+        return list(self._lights)
 
     @property
     def is_motion_activation_enabled(self) -> bool:
