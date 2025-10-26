@@ -187,6 +187,7 @@ lights:
 **Notes:**
 - At least one light entity must be configured
 - YAML configurations are imported as config entries on Home Assistant startup
+- **Entity validation is skipped during import** - entities don't need to exist yet (useful for Zigbee/Z-Wave lights that initialize later)
 - Duplicate names are prevented - YAML import will skip if a UI entry with the same name exists
 - You can reconfigure YAML entries through the UI after import
 

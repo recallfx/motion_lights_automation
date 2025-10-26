@@ -244,3 +244,38 @@ async def test_yaml_import_duplicate_prevented(
     # Should abort because of duplicate unique_id
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
+
+
+async def test_yaml_import_with_missing_entities(hass: HomeAssistant) -> None:
+    """Test that YAML import succeeds even when entities don't exist yet."""
+    from homeassistant.config_entries import ConfigFlowContext
+
+    # Create a proper context for the flow
+    context = ConfigFlowContext(source=SOURCE_IMPORT)
+
+    # Import data with entities that don't exist (simulating lights not initialized yet)
+    import_data = {
+        "name": "Test Missing Entities",
+        CONF_MOTION_ENTITY: ["binary_sensor.nonexistent_motion"],
+        CONF_LIGHTS: ["light.nonexistent_light"],
+        CONF_OVERRIDE_SWITCH: None,
+        CONF_HOUSE_ACTIVE: None,
+        CONF_AMBIENT_LIGHT_SENSOR: None,
+        CONF_NO_MOTION_WAIT: 300,
+        CONF_EXTENDED_TIMEOUT: 1200,
+        CONF_MOTION_DELAY: 0,
+        CONF_BRIGHTNESS_ACTIVE: 80,
+        CONF_BRIGHTNESS_INACTIVE: 10,
+        CONF_AMBIENT_LIGHT_THRESHOLD: 50,
+        CONF_MOTION_ACTIVATION: True,
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context=context,
+        data=import_data,
+    )
+
+    # Should succeed even though entities don't exist
+    assert result["type"] == "create_entry"
+    assert result["title"] == "Test Missing Entities"

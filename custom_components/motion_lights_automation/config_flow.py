@@ -399,12 +399,12 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(name)
         self._abort_if_unique_id_configured()
 
-        # Validate the imported data
-        try:
-            await validate_input(self.hass, import_data)
-        except (CannotConnect, InvalidConfiguration) as err:
-            _LOGGER.error("Failed to import YAML configuration: %s", err)
-            return self.async_abort(reason="invalid_import")
+        # Skip entity validation during YAML import - entities may not be ready yet
+        # The coordinator will handle missing entities gracefully at runtime
+        _LOGGER.debug(
+            "Skipping entity validation for YAML import '%s' - entities will be validated at runtime",
+            name,
+        )
 
         # Create the entry
         return self.async_create_entry(
