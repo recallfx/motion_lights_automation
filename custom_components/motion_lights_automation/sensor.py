@@ -142,11 +142,11 @@ class MotionLightsSensor(SensorEntity):
                     ambient_light_low = sensor_state.state == "on"
 
         # Calculate modes based on switches
-        use_dim_brightness = False
+        is_dark_inside = False
         if house_active is not None:
-            use_dim_brightness = not house_active
+            is_dark_inside = not house_active
         elif ambient_light_low is not None:
-            use_dim_brightness = ambient_light_low
+            is_dark_inside = ambient_light_low
 
         # Core debugging information - what you need to understand what's happening
         attrs: dict[str, Any] = {
@@ -166,7 +166,7 @@ class MotionLightsSensor(SensorEntity):
             "brightness_inactive": self._coordinator.brightness_inactive,
             "house_active": house_active,
             "ambient_light_low": ambient_light_low,
-            "use_dim_brightness": use_dim_brightness,
+            "is_dark_inside": is_dark_inside,
             "no_motion_wait": self._coordinator.no_motion_wait_seconds,
             "extended_timeout": self._coordinator.extended_timeout,
             # Entities being controlled

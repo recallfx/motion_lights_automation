@@ -77,9 +77,21 @@ class TimeOfDayBrightnessStrategy(BrightnessStrategy):
         self.inactive_brightness = inactive_brightness
 
     def get_brightness(self, context: dict[str, Any]) -> int:
-        """Get brightness based on house activity level."""
-        is_house_active = context.get("is_house_active", True)
+        """Get brightness based on ambient light and house activity level.
 
+        Returns:
+            0 if there's sufficient ambient light (bright mode)
+            active_brightness if dark and house is active
+            inactive_brightness if dark and house is inactive
+        """
+        # Check ambient light first - if it's bright outside, don't turn on lights
+        is_dark_inside = context.get("is_dark_inside", True)
+        if not is_dark_inside:
+            # Bright mode - sufficient ambient light, no need for automation
+            return 0
+
+        # Dark mode - use house activity to decide brightness level
+        is_house_active = context.get("is_house_active", True)
         return self.active_brightness if is_house_active else self.inactive_brightness
 
 

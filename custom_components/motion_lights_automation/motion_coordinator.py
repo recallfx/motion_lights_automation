@@ -629,7 +629,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _get_context(self):
         """Get context for strategies."""
         is_house_active = True
-        use_dim_brightness = True
+        is_dark_inside = True
 
         # Get switch states
         if self.house_active:
@@ -650,7 +650,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "ambient_light_sensor entity '%s' not found; assuming low ambient light",
                     self.ambient_light_sensor,
                 )
-                use_dim_brightness = True
+                is_dark_inside = True
             else:
                 # Check if it's a lux sensor (numeric) or binary sensor
                 unit = sensor_state.attributes.get("unit_of_measurement")
@@ -659,28 +659,24 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # Lux sensor - use hysteresis
                     try:
                         current_lux = float(sensor_state.state)
-                        use_dim_brightness = self._evaluate_lux_with_hysteresis(
-                            current_lux
-                        )
+                        is_dark_inside = self._evaluate_lux_with_hysteresis(current_lux)
                     except (ValueError, TypeError):
                         _LOGGER.warning(
                             "Could not parse lux value '%s' from %s; assuming low ambient light",
                             sensor_state.state,
                             self.ambient_light_sensor,
                         )
-                        use_dim_brightness = True
+                        is_dark_inside = True
                 else:
-                    # Binary sensor - ON means low ambient light (dim mode)
-                    use_dim_brightness = sensor_state.state == "on"
+                    # Binary sensor - ON means low ambient light (dark inside)
+                    is_dark_inside = sensor_state.state == "on"
 
         motion_trigger = self.trigger_manager.get_trigger("motion")
         motion_active = motion_trigger.is_active() if motion_trigger else False
 
         # Return dict-like context that strategies can use
-        # Keep is_dark_inside for backward compatibility with strategies
         return {
-            "is_dark_inside": use_dim_brightness,  # Legacy name for compatibility
-            "use_dim_brightness": use_dim_brightness,
+            "is_dark_inside": is_dark_inside,
             "is_house_active": is_house_active,
             "motion_active": motion_active,
             "current_state": self.state_machine.current_state,

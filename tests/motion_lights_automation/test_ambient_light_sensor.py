@@ -57,8 +57,7 @@ async def test_binary_sensor_on_uses_dim_brightness(hass: HomeAssistant) -> None
     try:
         # Get context - should use dim brightness when sensor is ON
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
-        assert context["is_dark_inside"] is True  # Legacy compatibility
+        assert context["is_dark_inside"] is True
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -96,7 +95,7 @@ async def test_binary_sensor_off_uses_bright_brightness(hass: HomeAssistant) -> 
 
     try:
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -139,7 +138,7 @@ async def test_lux_sensor_below_low_threshold_is_dim(hass: HomeAssistant) -> Non
     try:
         # First evaluation - 20 lux is below threshold (50), should be dim
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
         assert coordinator._brightness_mode_is_dim is True
     finally:
         coordinator.async_cleanup_listeners()
@@ -182,7 +181,7 @@ async def test_lux_sensor_above_high_threshold_is_bright(hass: HomeAssistant) ->
     try:
         # First evaluation - 100 lux is above threshold (50), should be bright
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
         assert coordinator._brightness_mode_is_dim is False
     finally:
         coordinator.async_cleanup_listeners()
@@ -223,7 +222,7 @@ async def test_lux_sensor_hysteresis_stays_dim_in_deadzone(hass: HomeAssistant) 
     try:
         # Start at 20 lux - should be dim
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
 
         # Rise to 50 lux (in deadzone) - should STAY dim
         hass.states.async_set(
@@ -232,7 +231,7 @@ async def test_lux_sensor_hysteresis_stays_dim_in_deadzone(hass: HomeAssistant) 
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
 
         # Rise to 65 lux (still in deadzone) - should STAY dim
         hass.states.async_set(
@@ -241,7 +240,7 @@ async def test_lux_sensor_hysteresis_stays_dim_in_deadzone(hass: HomeAssistant) 
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
 
         # Rise to 75 lux (above HIGH threshold) - NOW switch to bright
         hass.states.async_set(
@@ -250,7 +249,7 @@ async def test_lux_sensor_hysteresis_stays_dim_in_deadzone(hass: HomeAssistant) 
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -292,7 +291,7 @@ async def test_lux_sensor_hysteresis_stays_bright_in_deadzone(
     try:
         # Start at 100 lux - should be bright
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
 
         # Drop to 50 lux (in deadzone) - should STAY bright
         hass.states.async_set(
@@ -301,7 +300,7 @@ async def test_lux_sensor_hysteresis_stays_bright_in_deadzone(
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
 
         # Drop to 35 lux (still in deadzone) - should STAY bright
         hass.states.async_set(
@@ -310,7 +309,7 @@ async def test_lux_sensor_hysteresis_stays_bright_in_deadzone(
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
 
         # Drop to 25 lux (below LOW threshold) - NOW switch to dim
         hass.states.async_set(
@@ -319,7 +318,7 @@ async def test_lux_sensor_hysteresis_stays_bright_in_deadzone(
             {"unit_of_measurement": "lx"},
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -359,24 +358,22 @@ async def test_lux_sensor_prevents_flickering_from_clouds(hass: HomeAssistant) -
     try:
         # Start at 80 lux - bright mode
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
 
         # Cloud passes - drops to 45 lux (in deadzone)
         hass.states.async_set("sensor.illuminance", "45", {"unit_of_measurement": "lx"})
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False  # STAYS bright
+        assert context["is_dark_inside"] is False  # STAYS bright
 
         # Cloud passes - back to 60 lux
         hass.states.async_set("sensor.illuminance", "60", {"unit_of_measurement": "lx"})
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False  # Still bright
+        assert context["is_dark_inside"] is False  # Still bright
 
         # Another cloud - drops to 40 lux
         hass.states.async_set("sensor.illuminance", "40", {"unit_of_measurement": "lx"})
         context = coordinator._get_context()
-        assert (
-            context["use_dim_brightness"] is False
-        )  # STILL bright (hysteresis working!)
+        assert context["is_dark_inside"] is False  # STILL bright (hysteresis working!)
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -424,7 +421,7 @@ async def test_lux_sensor_with_motion_activation(hass: HomeAssistant) -> None:
 
         assert coordinator.current_state == STATE_MOTION_AUTO
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -464,7 +461,7 @@ async def test_invalid_lux_value_falls_back_to_dim(hass: HomeAssistant) -> None:
     try:
         # Should fall back to dim mode (safe default)
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
     finally:
         coordinator.async_cleanup_listeners()
 
@@ -504,18 +501,18 @@ async def test_custom_threshold_values(hass: HomeAssistant) -> None:
     try:
         # 50 lux is below threshold (100), should be dim
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
 
         # Rise to 90 lux (in deadzone 80-120) - stays dim
         hass.states.async_set("sensor.illuminance", "90", {"unit_of_measurement": "lx"})
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is True
+        assert context["is_dark_inside"] is True
 
         # Rise to 125 lux (above 120) - switches to bright
         hass.states.async_set(
             "sensor.illuminance", "125", {"unit_of_measurement": "lx"}
         )
         context = coordinator._get_context()
-        assert context["use_dim_brightness"] is False
+        assert context["is_dark_inside"] is False
     finally:
         coordinator.async_cleanup_listeners()
