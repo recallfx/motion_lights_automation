@@ -652,7 +652,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 is_dark_inside = True
             else:
-                # Check if it's a lux sensor (numeric) or binary sensor
+                # Check if it's a lux sensor (numeric) or binary representation
                 unit = sensor_state.attributes.get("unit_of_measurement")
 
                 if unit == "lx":
@@ -668,8 +668,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         is_dark_inside = True
                 else:
-                    # Binary sensor - ON means low ambient light (dark inside)
-                    is_dark_inside = sensor_state.state == "on"
+                    # Any other sensor - treat as binary representation
+                    # ON state means low ambient light (dark inside)
+                    # For binary_sensor, switch, input_boolean, etc.
+                    is_dark_inside = sensor_state.state in ("on", "true", "True", "1")
 
         motion_trigger = self.trigger_manager.get_trigger("motion")
         motion_active = motion_trigger.is_active() if motion_trigger else False

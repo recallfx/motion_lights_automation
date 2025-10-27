@@ -17,7 +17,7 @@
           "motion_entity": "Binary sensor(s) that detect motion",
           "lights": "The lights this automation should control",
           "override_switch": "Switch to enable/disable automation",
-          "ambient_light_sensor": "Lux sensor or binary sensor for ambient light detection (optional)",
+          "ambient_light_sensor": "Sensor for ambient light detection (lux sensor with numeric value, or any sensor with binary state representation like on/off)",
           "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
         }
       },
@@ -59,7 +59,7 @@
           "motion_entity": "Binary sensor(s) that detect motion",
           "lights": "The lights this automation should control",
           "override_switch": "Switch to enable/disable automation",
-          "ambient_light_sensor": "Lux sensor or binary sensor for ambient light detection (optional)",
+          "ambient_light_sensor": "Sensor for ambient light detection (lux sensor with numeric value, or any sensor with binary state representation like on/off)",
           "house_active": "If set, affects brightness (ON=active brightness, OFF=inactive brightness)"
         }
       },

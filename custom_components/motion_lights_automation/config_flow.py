@@ -96,12 +96,10 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
             vol.Optional(
                 CONF_AMBIENT_LIGHT_SENSOR, default=data.get(CONF_AMBIENT_LIGHT_SENSOR)
             )
-        ] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
-        )
+        ] = selector.EntitySelector(selector.EntitySelectorConfig())
     else:
         schema_dict[vol.Optional(CONF_AMBIENT_LIGHT_SENSOR)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+            selector.EntitySelectorConfig()
         )
 
     if data and data.get(CONF_HOUSE_ACTIVE):
@@ -374,8 +372,10 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
             new_unique_id = f"{name}:{lights_key}:{motion_key}"
 
             if old_unique_id != new_unique_id:
-                await self.async_set_unique_id(new_unique_id)
-                self._abort_if_unique_id_mismatch(reason="wrong_account")
+                # Update the unique ID to the new one
+                await self.async_set_unique_id(new_unique_id, raise_on_progress=False)
+                # Check if this new unique ID conflicts with another existing entry
+                self._abort_if_unique_id_configured()
 
             return self.async_update_reload_and_abort(
                 config_entry,

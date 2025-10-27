@@ -39,7 +39,7 @@ The integration uses a two-step configuration process. In the first step, config
 | **Lights to Control** | Yes | The lights this automation should control |
 | **Override Switch** | No | Switch to temporarily disable automation |
 | **House Active Switch** | No | Switch indicating house is active (for brightness control) |
-| **Dark Inside Sensor** | No | Binary sensor indicating darkness inside the room |
+| **Ambient Light Sensor** | No | Sensor indicating ambient light level (lux sensor) or darkness (binary sensor or any sensor with binary state representation) |
 
 **Note:** At least one light must be configured. Create separate instances if you need different behaviors for different light types.
 
@@ -637,6 +637,25 @@ automation:
 ---
 
 ## Troubleshooting Guide
+
+### Real-Time Event Monitoring
+
+The integration fires events to the Home Assistant event bus for real-time debugging and monitoring. This is **the best way** to understand what's happening inside the automation.
+
+**Quick Start:**
+1. Go to **Developer Tools** → **Events**
+2. Listen to: `motion_lights_automation_state_changed`
+3. Trigger your motion sensor
+4. Watch state transitions appear in real-time
+
+**Available Events:**
+- `motion_lights_automation_state_changed` - State transitions
+- `motion_lights_automation_motion_detected` - Motion events
+- `motion_lights_automation_manual_intervention` - Manual control detected
+- `motion_lights_automation_timer_expired` - Timer events
+- `motion_lights_automation_override_activated/deactivated` - Override changes
+
+📖 **See [EVENTS.md](EVENTS.md) for complete event reference and examples**
 
 ### Lights Don't Turn On with Motion
 

@@ -46,7 +46,7 @@ AUTOMATION_SCHEMA = vol.Schema(
         vol.Required(CONF_LIGHTS): cv.entity_ids,
         vol.Optional(CONF_OVERRIDE_SWITCH): cv.entity_ids,
         vol.Optional(CONF_HOUSE_ACTIVE): cv.entity_ids,
-        vol.Optional(CONF_AMBIENT_LIGHT_SENSOR): cv.entity_ids,
+        vol.Optional(CONF_AMBIENT_LIGHT_SENSOR): cv.entity_id,
         vol.Optional(
             CONF_NO_MOTION_WAIT, default=DEFAULT_NO_MOTION_WAIT
         ): cv.positive_int,
