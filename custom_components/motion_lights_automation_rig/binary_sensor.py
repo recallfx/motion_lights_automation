@@ -53,10 +53,10 @@ class MotionSensor(BinarySensorEntity):
         self._is_on = False
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, unique_id)},
+            identifiers={(DOMAIN, config_entry_id)},
             name=f"{room_name}",
             manufacturer="Motion Lights Automation Rig",
-            model="Motion Sensor",
+            model="Test Room Simulator",
         )
 
     @property

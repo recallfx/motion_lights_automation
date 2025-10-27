@@ -30,16 +30,19 @@ async def async_setup_entry(
             unique_id=f"{config_entry.entry_id}_ceiling",
             name="Ceiling Light",
             room_name=room_name,
+            config_entry_id=config_entry.entry_id,
         ),
         TestLight(
             unique_id=f"{config_entry.entry_id}_background",
             name="Background Light",
             room_name=room_name,
+            config_entry_id=config_entry.entry_id,
         ),
         TestLight(
             unique_id=f"{config_entry.entry_id}_feature",
             name="Feature Light",
             room_name=room_name,
+            config_entry_id=config_entry.entry_id,
         ),
     ]
 
@@ -55,19 +58,22 @@ class TestLight(LightEntity):
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
     _attr_supported_features = LightEntityFeature.TRANSITION
 
-    def __init__(self, unique_id: str, name: str, room_name: str) -> None:
+    def __init__(
+        self, unique_id: str, name: str, room_name: str, config_entry_id: str
+    ) -> None:
         """Initialize the light."""
         self._unique_id = unique_id
         self._attr_name = name
         self._room_name = room_name
+        self._config_entry_id = config_entry_id
         self._is_on = False
         self._brightness = 255
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, unique_id)},
+            identifiers={(DOMAIN, config_entry_id)},
             name=f"{room_name}",
             manufacturer="Motion Lights Automation Rig",
-            model="Test Light",
+            model="Test Room Simulator",
         )
 
     @property

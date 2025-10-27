@@ -9,6 +9,8 @@ from homeassistant.core import HomeAssistant
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.LIGHT,
+    Platform.NUMBER,
+    Platform.SENSOR,
     Platform.SWITCH,
 ]
 

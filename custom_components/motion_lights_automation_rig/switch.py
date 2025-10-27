@@ -40,18 +40,21 @@ async def async_setup_entry(
             name="Override Switch",
             room_name=room_name,
             icon="mdi:toggle-switch",
+            config_entry_id=config_entry.entry_id,
         ),
         TestSwitch(
             unique_id=f"{config_entry.entry_id}_dark_inside",
             name="Dark Inside",
             room_name=room_name,
             icon="mdi:moon-waning-crescent",
+            config_entry_id=config_entry.entry_id,
         ),
         TestSwitch(
             unique_id=f"{config_entry.entry_id}_house_active",
             name="House Active",
             room_name=room_name,
             icon="mdi:home-account",
+            config_entry_id=config_entry.entry_id,
         ),
     ]
 
@@ -83,10 +86,10 @@ class MotionToggleSwitch(SwitchEntity):
         self._config_entry_id = config_entry_id
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, unique_id)},
+            identifiers={(DOMAIN, config_entry_id)},
             name=f"{room_name}",
             manufacturer="Motion Lights Automation Rig",
-            model="Motion Toggle",
+            model="Test Room Simulator",
         )
 
     @property
@@ -148,6 +151,7 @@ class TestSwitch(SwitchEntity):
         name: str,
         room_name: str,
         icon: str,
+        config_entry_id: str,
     ) -> None:
         """Initialize the switch."""
         self._unique_id = unique_id
@@ -155,12 +159,13 @@ class TestSwitch(SwitchEntity):
         self._room_name = room_name
         self._attr_icon = icon
         self._is_on = False
+        self._config_entry_id = config_entry_id
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, unique_id)},
+            identifiers={(DOMAIN, config_entry_id)},
             name=f"{room_name}",
             manufacturer="Motion Lights Automation Rig",
-            model="Test Switch",
+            model="Test Room Simulator",
         )
 
     @property

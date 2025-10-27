@@ -36,7 +36,7 @@ class MotionLightsAutomationRigConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 if not errors:
                     return self.async_create_entry(
-                        title=user_input[CONF_NAME],
+                        title=f"{user_input[CONF_NAME]} (Test Rig)",
                         data=user_input,
                     )
             except Exception:  # pylint: disable=broad-except
