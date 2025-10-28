@@ -112,8 +112,8 @@ async def test_motion_activation_disabled_resets_timer_in_manual_state(
     await coordinator.async_setup_listeners()
 
     try:
-        # Mock startup time to simulate grace period expiry
-        coordinator._startup_time = dt_util.now() - timedelta(seconds=11)
+        # Mock startup time to simulate grace period expiry (beyond 180s)
+        coordinator._startup_time = dt_util.now() - timedelta(seconds=200)
 
         # Manually turn on light (simulate user action)
         with patch.object(
@@ -175,8 +175,8 @@ async def test_motion_keeps_resetting_timer_preventing_shutoff(
     await coordinator.async_setup_listeners()
 
     try:
-        # Mock startup time to simulate grace period expiry
-        coordinator._startup_time = dt_util.now() - timedelta(seconds=11)
+        # Mock startup time to simulate grace period expiry (beyond 180s)
+        coordinator._startup_time = dt_util.now() - timedelta(seconds=200)
 
         # Manually turn on light
         with patch.object(

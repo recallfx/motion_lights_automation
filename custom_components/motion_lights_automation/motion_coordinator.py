@@ -120,6 +120,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._startup_time = dt_util.now()
         self._startup_grace_period = 180  # seconds
 
+        # Track which lights we've seen to skip manual detection on first KNX sync
+        self._lights_initialized: set[str] = set()
+
     def _load_config(self) -> None:
         """Load configuration."""
         data = self.config_entry.data
@@ -461,11 +464,34 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             new_state = event.data.get("new_state")
             old_state = event.data.get("old_state")
 
-            if not new_state or not old_state:
+            if not new_state:
                 return
+
+            # Check if this light was already tracked before this state change
+            previously_tracked = (
+                self.light_controller.get_light_state(entity_id) is not None
+            )
 
             # Update light controller state
             self.light_controller.update_light_state(entity_id, new_state)
+
+            # Skip manual detection for first state update of each light (KNX sync)
+            # Only treat as "first seen" if we didn't already have state for it
+            first_seen = (
+                entity_id not in self._lights_initialized and not previously_tracked
+            )
+            if first_seen:
+                self._lights_initialized.add(entity_id)
+                _LOGGER.debug(
+                    "First state sync for %s (state=%s) - assuming automation control",
+                    entity_id,
+                    new_state.state,
+                )
+                self._update_data()
+                return
+
+            if not old_state:
+                return
 
             # Skip manual intervention detection during startup grace period
             # This prevents false positives when lights report their state after integration loads
