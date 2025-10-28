@@ -203,6 +203,26 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
+        # Set up ambient light sensor monitoring
+        if self.ambient_light_sensor:
+            self._unsubscribers.append(
+                async_track_state_change_event(
+                    self.hass,
+                    [self.ambient_light_sensor],
+                    self._async_ambient_light_changed,
+                )
+            )
+
+        # Set up house active monitoring
+        if self.house_active:
+            self._unsubscribers.append(
+                async_track_state_change_event(
+                    self.hass,
+                    [self.house_active],
+                    self._async_house_active_changed,
+                )
+            )
+
         # Initialize light states
         self.light_controller.refresh_all_states()
 
@@ -531,6 +551,153 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif current == STATE_IDLE:
             if new_state.state == "on":
                 self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
+
+    async def _async_ambient_light_changed(self, event: Event) -> None:
+        """Handle ambient light sensor state change.
+
+        When ambient light changes, re-evaluate whether lights should be on or off:
+        - If it becomes dark and motion is active: turn on lights
+        - If it becomes bright: turn off auto-controlled lights
+        """
+        try:
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
+
+            if not new_state or not old_state:
+                return
+
+            # Get context to evaluate current ambient conditions
+            context = self._get_context()
+            is_dark_now = context.get("is_dark_inside", True)
+
+            # Determine if darkness state changed (with hysteresis for lux sensors)
+            old_is_dark = self._evaluate_darkness_from_state(old_state)
+
+            if old_is_dark == is_dark_now:
+                # No effective change in darkness state
+                _LOGGER.debug(
+                    "Ambient light sensor changed but darkness state unchanged (is_dark=%s)",
+                    is_dark_now,
+                )
+                return
+
+            _LOGGER.info(
+                "Ambient light condition changed: %s -> %s (is_dark=%s)",
+                old_state.state,
+                new_state.state,
+                is_dark_now,
+            )
+
+            current = self.state_machine.current_state
+            motion_trigger = self.trigger_manager.get_trigger("motion")
+            motion_active = motion_trigger.is_active() if motion_trigger else False
+
+            # If it became dark and we have motion and motion_activation is enabled
+            if is_dark_now and motion_active and self.motion_activation:
+                if current in (STATE_IDLE, STATE_MANUAL_OFF):
+                    _LOGGER.info(
+                        "Became dark with motion active in %s - activating lights",
+                        current,
+                    )
+                    self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+                elif current in (STATE_MANUAL, STATE_AUTO, STATE_MOTION_MANUAL):
+                    # Lights already on - adjust brightness if needed
+                    _LOGGER.debug(
+                        "Became dark in %s - re-evaluating brightness",
+                        current,
+                    )
+                    await self._async_turn_on_lights()
+
+            # If it became bright, turn off auto-controlled lights
+            elif not is_dark_now:
+                if current in (STATE_AUTO, STATE_MOTION_AUTO):
+                    _LOGGER.info(
+                        "Became bright in %s - turning off auto-controlled lights",
+                        current,
+                    )
+                    self.timer_manager.cancel_all_timers()
+                    await self._async_turn_off_lights()
+                    # Transition to appropriate state based on whether lights stay on
+                    # The light change handler will transition to IDLE if all lights are off
+                elif current in (STATE_MOTION_MANUAL, STATE_MANUAL):
+                    # Lights are manually controlled - just adjust brightness to 0 (off)
+                    # But don't force them off if user wants them on
+                    _LOGGER.debug(
+                        "Became bright in %s - lights are manually controlled, not forcing off",
+                        current,
+                    )
+
+            self._update_data()
+        except Exception:
+            _LOGGER.exception("Error in ambient light changed handler")
+
+    async def _async_house_active_changed(self, event: Event) -> None:
+        """Handle house active state change.
+
+        When house active state changes, adjust brightness of currently lit lights:
+        - If house becomes active: increase brightness
+        - If house becomes inactive: decrease brightness
+        """
+        try:
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
+
+            if not new_state or not old_state:
+                return
+
+            old_is_active = old_state.state == "on"
+            new_is_active = new_state.state == "on"
+
+            if old_is_active == new_is_active:
+                # No change
+                return
+
+            _LOGGER.info(
+                "House active state changed: %s -> %s",
+                old_state.state,
+                new_state.state,
+            )
+
+            current = self.state_machine.current_state
+
+            # Only adjust brightness if lights are currently on in auto-controlled states
+            if current in (
+                STATE_AUTO,
+                STATE_MOTION_AUTO,
+                STATE_MOTION_MANUAL,
+                STATE_MANUAL,
+            ):
+                if self.light_controller.any_lights_on():
+                    _LOGGER.debug(
+                        "House active changed in %s with lights on - adjusting brightness",
+                        current,
+                    )
+                    # Re-apply lights with new brightness based on updated house_active state
+                    await self._async_turn_on_lights()
+
+            self._update_data()
+        except Exception:
+            _LOGGER.exception("Error in house active changed handler")
+
+    def _evaluate_darkness_from_state(self, state) -> bool:
+        """Evaluate if it's dark based on a given state object.
+
+        This is used to detect actual changes in darkness vs just sensor value fluctuations.
+        """
+        if not self.ambient_light_sensor or not state:
+            return True
+
+        unit = state.attributes.get("unit_of_measurement")
+
+        if unit == "lx":
+            try:
+                lux = float(state.state)
+                return self._evaluate_lux_with_hysteresis(lux)
+            except (ValueError, TypeError):
+                return True
+        else:
+            # Binary representation
+            return state.state in ("on", "true", "True", "1")
 
     # ========================================================================
     # State Entry Callbacks
