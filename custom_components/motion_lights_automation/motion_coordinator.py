@@ -284,18 +284,36 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _set_initial_state(self) -> None:
         """Set initial state based on current conditions."""
         override_trigger = self.trigger_manager.get_trigger("override")
+        motion_trigger = self.trigger_manager.get_trigger("motion")
+
         if override_trigger and override_trigger.is_active():
             self.state_machine.force_state(STATE_OVERRIDDEN)
+            self._log_human_event("Integration restarted (override active)")
         elif self.light_controller.any_lights_on():
-            self.state_machine.force_state(STATE_MANUAL)
-            if not self.motion_activation:
+            # Lights are on after restart - we can't know if they were manual or auto
+            # Safest approach: assume automation control (AUTO or MOTION_AUTO)
+            # Start appropriate timer so lights turn off if conditions aren't met
+            if motion_trigger and motion_trigger.is_active():
+                # Motion is active - go to MOTION_AUTO
+                self.state_machine.force_state(STATE_MOTION_AUTO)
+                self._log_human_event(
+                    "Integration restarted (lights on, motion active)"
+                )
+            else:
+                # No motion currently - go to AUTO and start motion timer
+                # This way lights will turn off after timeout if motion doesn't resume
+                self.state_machine.force_state(STATE_AUTO)
+                self._log_human_event(
+                    "Integration restarted (lights on, starting timeout)"
+                )
                 self.timer_manager.start_timer(
-                    "extended",
-                    TimerType.EXTENDED,
+                    "motion",
+                    TimerType.MOTION,
                     self._async_timer_expired,
                 )
         else:
             self.state_machine.force_state(STATE_IDLE)
+            self._log_human_event("Integration restarted (lights off)")
 
     # ========================================================================
     # Trigger Event Handlers
@@ -390,6 +408,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._log_event(
                 "override_on", {"current_state": self.state_machine.current_state}
             )
+            self._log_human_event("Automation overridden")
             self.timer_manager.cancel_all_timers()
             result = self.state_machine.transition(StateTransitionEvent.OVERRIDE_ON)
             _LOGGER.info(
@@ -411,12 +430,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "override_off", {"current_state": self.state_machine.current_state}
             )
             if self.light_controller.any_lights_on():
+                self._log_human_event("Override released (lights on)")
                 result = self.state_machine.transition(
                     StateTransitionEvent.OVERRIDE_OFF,
                     target_state=STATE_MANUAL,
                 )
                 _LOGGER.info("Override OFF transition to MANUAL result: %s", result)
             else:
+                self._log_human_event("Override released (lights off)")
                 result = self.state_machine.transition(
                     StateTransitionEvent.OVERRIDE_OFF,
                     target_state=STATE_IDLE,
@@ -758,7 +779,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_motion_auto(self, state=None, from_state=None, event=None) -> None:
         """Entering MOTION_AUTO - turn on lights."""
         _LOGGER.debug("Entering MOTION_AUTO state (from %s)", from_state)
-        self._log_human_event("Lights turned on by motion")
+        # Don't log yet - wait to see if lights actually turn on
         self.hass.async_create_task(self._async_turn_on_lights())
 
     def _on_enter_auto(self, state=None, from_state=None, event=None) -> None:
@@ -847,10 +868,18 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_turn_on_lights(self) -> None:
         """Turn on lights."""
         context = self._get_context()
+        lights_were_on = self.light_controller.any_lights_on()
+
         await self.light_controller.turn_on_auto_lights(context)
 
-        # Log human event if lights didn't actually turn on (brightness was 0)
-        if not self.light_controller.any_lights_on():
+        lights_are_on = self.light_controller.any_lights_on()
+
+        # Log human event based on what actually happened
+        if lights_are_on and not lights_were_on:
+            # Lights just turned on
+            self._log_human_event("Lights turned on by motion")
+        elif not lights_are_on:
+            # Lights didn't turn on - explain why
             if not context.get("is_dark_inside"):
                 self._log_human_event(
                     "Motion detected (too bright - lights stayed off)"
