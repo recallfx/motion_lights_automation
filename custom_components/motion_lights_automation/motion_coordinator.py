@@ -110,6 +110,11 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_transition_reason: str | None = None
         self._last_transition_time: datetime | None = None
 
+        # Human-readable event log
+        self._event_log: list[str] = []
+        self._max_log_entries = 10
+        self._last_event_message: str = "Initialized"
+
     def _load_config(self) -> None:
         """Load configuration."""
         data = self.config_entry.data
@@ -753,6 +758,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_motion_auto(self, state=None, from_state=None, event=None) -> None:
         """Entering MOTION_AUTO - turn on lights."""
         _LOGGER.debug("Entering MOTION_AUTO state (from %s)", from_state)
+        self._log_human_event("Lights turned on by motion")
         self.hass.async_create_task(self._async_turn_on_lights())
 
     def _on_enter_auto(self, state=None, from_state=None, event=None) -> None:
@@ -767,6 +773,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_manual(self, state=None, from_state=None, event=None) -> None:
         """Entering MANUAL - start extended timer."""
         _LOGGER.debug("Entering MANUAL state - starting extended timer")
+        self._log_human_event("Lights turned on manually")
         self.timer_manager.cancel_timer("motion")
         self.timer_manager.start_timer(
             "extended",
@@ -779,6 +786,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug(
             "Entering MANUAL_OFF state - cancelling motion timer, starting extended timer"
         )
+        self._log_human_event("Lights turned off manually")
         self.timer_manager.cancel_timer("motion")  # Cancel any existing motion timer
         self.timer_manager.start_timer(
             "extended",
@@ -789,6 +797,12 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_idle(self, state=None, from_state=None, event=None) -> None:
         """Entering IDLE - turn off lights."""
         _LOGGER.debug("Entering IDLE state (from %s) - turning off lights", from_state)
+        if from_state == STATE_AUTO or from_state == STATE_MOTION_AUTO:
+            self._log_human_event("Lights turned off (timeout)")
+        elif from_state == STATE_MANUAL or from_state == STATE_MOTION_MANUAL:
+            self._log_human_event("Lights turned off (extended timeout)")
+        elif from_state == STATE_MANUAL_OFF:
+            self._log_human_event("Ready - waiting for motion")
         self.hass.async_create_task(self._async_turn_off_lights())
 
     def _on_transition(self, old_state: str, new_state: str, event) -> None:
@@ -834,6 +848,22 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Turn on lights."""
         context = self._get_context()
         await self.light_controller.turn_on_auto_lights(context)
+
+        # Log human event if lights didn't actually turn on (brightness was 0)
+        if not self.light_controller.any_lights_on():
+            if not context.get("is_dark_inside"):
+                self._log_human_event(
+                    "Motion detected (too bright - lights stayed off)"
+                )
+            elif context.get("is_house_active"):
+                self._log_human_event(
+                    f"Motion detected (active brightness {self.brightness_active}% - lights stayed off)"
+                )
+            else:
+                self._log_human_event(
+                    f"Motion detected (inactive brightness {self.brightness_inactive}% - lights stayed off)"
+                )
+
         self._update_data()
 
     async def _async_turn_off_lights(self) -> None:
@@ -973,6 +1003,21 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         _LOGGER.debug("Event logged: %s - %s", event_type, details)
 
+    def _log_human_event(self, message: str) -> None:
+        """Log a human-readable event message."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_entry = f"{timestamp} - {message}"
+        self._event_log.append(log_entry)
+
+        # Keep only last N entries
+        if len(self._event_log) > self._max_log_entries:
+            self._event_log.pop(0)
+
+        # Update last event message for sensor state
+        self._last_event_message = message
+
+        _LOGGER.debug("Human event logged: %s", log_entry)
+
     def _log_transition(self, from_state: str, to_state: str, reason: str) -> None:
         """Log a state transition."""
         self._last_transition_reason = reason
@@ -1002,6 +1047,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "lights_on": light_info.get("lights_on", 0),
             "total_lights": light_info.get("total_lights", 0),
             "recent_events": list(self._events),
+            "event_log": list(self._event_log),
+            "last_event_message": self._last_event_message,
             "last_transition_reason": self._last_transition_reason,
             "last_transition_time": (
                 self._last_transition_time.isoformat()
