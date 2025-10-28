@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_AMBIENT_LIGHT_SENSOR,
@@ -114,6 +115,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._event_log: list[str] = []
         self._max_log_entries = 10
         self._last_event_message: str = "Initialized"
+
+        # Startup grace period to avoid false manual intervention detection
+        self._startup_time = dt_util.now()
+        self._startup_grace_period = 10  # seconds
 
     def _load_config(self) -> None:
         """Load configuration."""
@@ -462,6 +467,19 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Update light controller state
             self.light_controller.update_light_state(entity_id, new_state)
 
+            # Skip manual intervention detection during startup grace period
+            # This prevents false positives when lights report their state after integration loads
+            seconds_since_startup = (dt_util.now() - self._startup_time).total_seconds()
+            in_grace_period = seconds_since_startup < self._startup_grace_period
+
+            if in_grace_period:
+                _LOGGER.debug(
+                    "Ignoring light change during startup grace period (%.1fs since startup)",
+                    seconds_since_startup,
+                )
+                self._update_data()
+                return
+
             # Check for manual intervention
             manual_intervention_handled = False
             if not self.light_controller.is_integration_context(new_state.context):
@@ -794,7 +812,13 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_manual(self, state=None, from_state=None, event=None) -> None:
         """Entering MANUAL - start extended timer."""
         _LOGGER.debug("Entering MANUAL state - starting extended timer")
-        self._log_human_event("Lights turned on manually")
+        # Only log if transitioning from a state where lights were off or auto-controlled
+        if from_state in (STATE_IDLE, STATE_MOTION_AUTO, STATE_AUTO, STATE_MANUAL_OFF):
+            self._log_human_event("Lights turned on manually")
+        elif from_state == STATE_MOTION_MANUAL:
+            self._log_human_event("Lights adjusted manually")
+        # If from STATE_MANUAL, it's just re-entry, don't log
+
         self.timer_manager.cancel_timer("motion")
         self.timer_manager.start_timer(
             "extended",

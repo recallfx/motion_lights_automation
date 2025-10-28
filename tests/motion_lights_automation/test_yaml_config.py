@@ -95,7 +95,7 @@ async def test_yaml_setup_full_config(
                 "lights": [mock_light, "light.background", "light.feature"],
                 CONF_OVERRIDE_SWITCH: [mock_override_switch],
                 CONF_HOUSE_ACTIVE: ["switch.house_active"],
-                CONF_AMBIENT_LIGHT_SENSOR: [mock_ambient_light_sensor],
+                CONF_AMBIENT_LIGHT_SENSOR: mock_ambient_light_sensor,
                 CONF_NO_MOTION_WAIT: 600,
                 CONF_EXTENDED_TIMEOUT: 1800,
                 CONF_MOTION_DELAY: 5,

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from custom_components.motion_lights_automation.const import (
     CONF_EXTENDED_TIMEOUT,
@@ -110,6 +112,9 @@ async def test_motion_activation_disabled_resets_timer_in_manual_state(
     await coordinator.async_setup_listeners()
 
     try:
+        # Mock startup time to simulate grace period expiry
+        coordinator._startup_time = dt_util.now() - timedelta(seconds=11)
+
         # Manually turn on light (simulate user action)
         with patch.object(
             coordinator.light_controller, "is_integration_context", return_value=False
@@ -170,6 +175,9 @@ async def test_motion_keeps_resetting_timer_preventing_shutoff(
     await coordinator.async_setup_listeners()
 
     try:
+        # Mock startup time to simulate grace period expiry
+        coordinator._startup_time = dt_util.now() - timedelta(seconds=11)
+
         # Manually turn on light
         with patch.object(
             coordinator.light_controller, "is_integration_context", return_value=False

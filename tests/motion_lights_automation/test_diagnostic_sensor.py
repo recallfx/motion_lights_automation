@@ -44,10 +44,11 @@ async def test_diagnostic_sensor_created(hass: HomeAssistant) -> None:
 
     # Check that diagnostic sensor exists
     # Entity ID is based on config entry title
-    diagnostic_sensor_entity_id = "sensor.mock_title_diagnostics"
+    diagnostic_sensor_entity_id = "sensor.mock_title_lighting_automation"
     diagnostic_state = hass.states.get(diagnostic_sensor_entity_id)
     assert diagnostic_state is not None
-    assert diagnostic_state.state == "idle"
+    # State is now the last event message - after initialization it should show restart message
+    assert "Integration restarted" in diagnostic_state.state
 
     # Cleanup
     coordinator = config_entry.runtime_data
@@ -79,7 +80,7 @@ async def test_diagnostic_sensor_tracks_events(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     # Get diagnostic sensor
-    diagnostic_sensor_entity_id = "sensor.mock_title_diagnostics"
+    diagnostic_sensor_entity_id = "sensor.mock_title_lighting_automation"
     diagnostic_state = hass.states.get(diagnostic_sensor_entity_id)
     assert diagnostic_state is not None
 
@@ -89,12 +90,11 @@ async def test_diagnostic_sensor_tracks_events(hass: HomeAssistant) -> None:
 
     # Check that event was logged
     diagnostic_state = hass.states.get(diagnostic_sensor_entity_id)
-    recent_events = diagnostic_state.attributes.get("recent_events", [])
-    assert len(recent_events) > 0
+    event_log = diagnostic_state.attributes.get("event_log", [])
+    assert len(event_log) > 0
 
-    # Check that motion_on event is in the list
-    event_types = [event["type"] for event in recent_events]
-    assert "motion_on" in event_types
+    # Event log should contain human-readable messages
+    assert any("motion" in event.lower() for event in event_log)
 
     # Cleanup
     coordinator = config_entry.runtime_data
@@ -126,7 +126,7 @@ async def test_diagnostic_sensor_tracks_transitions(hass: HomeAssistant) -> None
     await hass.async_block_till_done()
 
     # Get diagnostic sensor
-    diagnostic_sensor_entity_id = "sensor.mock_title_diagnostics"
+    diagnostic_sensor_entity_id = "sensor.mock_title_lighting_automation"
 
     # Trigger motion to cause state transition
     hass.states.async_set("binary_sensor.motion", STATE_ON)
@@ -177,7 +177,7 @@ async def test_diagnostic_sensor_shows_conditions(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     # Get diagnostic sensor
-    diagnostic_sensor_entity_id = "sensor.mock_title_diagnostics"
+    diagnostic_sensor_entity_id = "sensor.mock_title_lighting_automation"
     diagnostic_state = hass.states.get(diagnostic_sensor_entity_id)
     assert diagnostic_state is not None
 
