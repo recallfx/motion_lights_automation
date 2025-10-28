@@ -272,4 +272,7 @@ class MotionLightsDiagnosticSensor(SensorEntity):
             "total_lights": diagnostic_data.get("total_lights"),
             # Event log (most recent events)
             "recent_events": diagnostic_data.get("recent_events", []),
+            # Configuration (from main sensor)
+            "brightness_active": self._coordinator.brightness_active,
+            "brightness_inactive": self._coordinator.brightness_inactive,
         }
