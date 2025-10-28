@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -103,6 +104,12 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._cleanup_handle = None
         self.data = {}
 
+        # Event tracking for diagnostics
+        self._events: list[dict[str, Any]] = []
+        self._max_events = 100
+        self._last_transition_reason: str | None = None
+        self._last_transition_time: datetime | None = None
+
     def _load_config(self) -> None:
         """Load configuration."""
         data = self.config_entry.data
@@ -135,11 +142,25 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self.override_switch = str(override_cfg) if override_cfg else None
 
-        self.ambient_light_sensor = data.get(CONF_AMBIENT_LIGHT_SENSOR)
+        # Ambient light sensor and house active - handle both string and list
+        ambient_cfg = data.get(CONF_AMBIENT_LIGHT_SENSOR)
+        if isinstance(ambient_cfg, (list, tuple, set)):
+            ambient_list = [str(v) for v in ambient_cfg if v]
+            self.ambient_light_sensor = ambient_list[0] if ambient_list else None
+        else:
+            self.ambient_light_sensor = str(ambient_cfg) if ambient_cfg else None
+
         self.ambient_light_threshold = data.get(
             CONF_AMBIENT_LIGHT_THRESHOLD, DEFAULT_AMBIENT_LIGHT_THRESHOLD
         )
-        self.house_active = data.get(CONF_HOUSE_ACTIVE)
+
+        house_cfg = data.get(CONF_HOUSE_ACTIVE)
+        if isinstance(house_cfg, (list, tuple, set)):
+            house_list = [str(v) for v in house_cfg if v]
+            self.house_active = house_list[0] if house_list else None
+        else:
+            self.house_active = str(house_cfg) if house_cfg else None
+
         self.brightness_active = data.get(
             CONF_BRIGHTNESS_ACTIVE, DEFAULT_BRIGHTNESS_ACTIVE
         )
@@ -279,6 +300,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Handle motion detected."""
         try:
             _LOGGER.info("Motion ON")
+            self._log_event("motion_on", {"motion_activation": self.motion_activation})
 
             if not self.motion_activation:
                 # When motion_activation is disabled, motion doesn't turn on lights automatically.
@@ -341,6 +363,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Handle motion cleared."""
         try:
             _LOGGER.info("Motion OFF")
+            self._log_event(
+                "motion_off", {"current_state": self.state_machine.current_state}
+            )
 
             current = self.state_machine.current_state
 
@@ -356,6 +381,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             _LOGGER.info(
                 "Override ON - current state: %s", self.state_machine.current_state
+            )
+            self._log_event(
+                "override_on", {"current_state": self.state_machine.current_state}
             )
             self.timer_manager.cancel_all_timers()
             result = self.state_machine.transition(StateTransitionEvent.OVERRIDE_ON)
@@ -373,6 +401,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             _LOGGER.info(
                 "Override OFF - current state: %s", self.state_machine.current_state
+            )
+            self._log_event(
+                "override_off", {"current_state": self.state_machine.current_state}
             )
             if self.light_controller.any_lights_on():
                 result = self.state_machine.transition(
@@ -587,6 +618,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 new_state.state,
                 is_dark_now,
             )
+            self._log_event(
+                "ambient_light_changed",
+                {
+                    "old_state": old_state.state,
+                    "new_state": new_state.state,
+                    "is_dark": is_dark_now,
+                },
+            )
 
             current = self.state_machine.current_state
             motion_trigger = self.trigger_manager.get_trigger("motion")
@@ -656,6 +695,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "House active state changed: %s -> %s",
                 old_state.state,
                 new_state.state,
+            )
+            self._log_event(
+                "house_active_changed",
+                {
+                    "old_state": old_state.state,
+                    "new_state": new_state.state,
+                    "is_active": new_is_active,
+                },
             )
 
             current = self.state_machine.current_state
@@ -749,6 +796,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info(
             "State transition: %s -> %s (event: %s)", old_state, new_state, event.value
         )
+        self._log_transition(old_state, new_state, event.value)
         self._update_data()
 
     # ========================================================================
@@ -904,6 +952,66 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # ========================================================================
     # Data Management
+    # ========================================================================
+
+    # ========================================================================
+    # Event Tracking (for diagnostics)
+    # ========================================================================
+
+    def _log_event(self, event_type: str, details: dict[str, Any]) -> None:
+        """Log an event for diagnostics."""
+        event = {
+            "timestamp": datetime.now().isoformat(),
+            "type": event_type,
+            **details,
+        }
+        self._events.append(event)
+
+        # Keep only last N events
+        if len(self._events) > self._max_events:
+            self._events.pop(0)
+
+        _LOGGER.debug("Event logged: %s - %s", event_type, details)
+
+    def _log_transition(self, from_state: str, to_state: str, reason: str) -> None:
+        """Log a state transition."""
+        self._last_transition_reason = reason
+        self._last_transition_time = datetime.now()
+        self._log_event(
+            "state_transition",
+            {
+                "from_state": from_state,
+                "to_state": to_state,
+                "reason": reason,
+            },
+        )
+
+    def get_diagnostic_data(self) -> dict[str, Any]:
+        """Get diagnostic data for sensor."""
+        context = self._get_context()
+        timer_info = self.timer_manager.get_info()
+        light_info = self.light_controller.get_info()
+
+        return {
+            "current_state": self.state_machine.current_state,
+            "motion_active": context.get("motion_active", False),
+            "is_dark_inside": context.get("is_dark_inside", True),
+            "is_house_active": context.get("is_house_active", False),
+            "motion_activation_enabled": self.motion_activation,
+            "timers": timer_info.get("timers", {}),
+            "lights_on": light_info.get("lights_on", 0),
+            "total_lights": light_info.get("total_lights", 0),
+            "recent_events": list(self._events),
+            "last_transition_reason": self._last_transition_reason,
+            "last_transition_time": (
+                self._last_transition_time.isoformat()
+                if self._last_transition_time
+                else None
+            ),
+        }
+
+    # ========================================================================
+    # Data Update
     # ========================================================================
 
     def _update_data(self) -> None:
