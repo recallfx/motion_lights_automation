@@ -41,11 +41,18 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
+def get_user_schema(
+    data: dict[str, Any] | None = None, is_reconfigure: bool = False
+) -> vol.Schema:
     """Get the basic user schema with optional default values.
 
     All fields are optional. Motion and light selectors support multiple entities.
     Defaults for multi-select fields are empty lists to avoid type errors when omitted.
+
+    Args:
+        data: Existing configuration data to use as defaults
+        is_reconfigure: If True, don't set defaults for optional entity fields
+                       to allow users to clear them during reconfiguration
     """
 
     def _as_list(value: Any) -> list[str]:
@@ -82,7 +89,8 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
     }
 
     # Only add defaults for optional single-entity selectors if they have values
-    if data and data.get(CONF_OVERRIDE_SWITCH):
+    # During reconfiguration, don't set defaults to allow users to clear fields
+    if data and data.get(CONF_OVERRIDE_SWITCH) and not is_reconfigure:
         schema_dict[
             vol.Optional(CONF_OVERRIDE_SWITCH, default=data.get(CONF_OVERRIDE_SWITCH))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
@@ -91,7 +99,7 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
             selector.EntitySelectorConfig(domain="switch")
         )
 
-    if data and data.get(CONF_AMBIENT_LIGHT_SENSOR):
+    if data and data.get(CONF_AMBIENT_LIGHT_SENSOR) and not is_reconfigure:
         schema_dict[
             vol.Optional(
                 CONF_AMBIENT_LIGHT_SENSOR, default=data.get(CONF_AMBIENT_LIGHT_SENSOR)
@@ -102,7 +110,7 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
             selector.EntitySelectorConfig()
         )
 
-    if data and data.get(CONF_HOUSE_ACTIVE):
+    if data and data.get(CONF_HOUSE_ACTIVE) and not is_reconfigure:
         schema_dict[
             vol.Optional(CONF_HOUSE_ACTIVE, default=data.get(CONF_HOUSE_ACTIVE))
         ] = selector.EntitySelector(
@@ -333,7 +341,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         # Show form with current data as defaults
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=get_user_schema(config_entry.data),
+            data_schema=get_user_schema(config_entry.data, is_reconfigure=True),
             errors=errors,
             description_placeholders={"name": config_entry.title},
         )
