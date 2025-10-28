@@ -118,7 +118,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Startup grace period to avoid false manual intervention detection
         self._startup_time = dt_util.now()
-        self._startup_grace_period = 10  # seconds
+        self._startup_grace_period = 180  # seconds
 
     def _load_config(self) -> None:
         """Load configuration."""

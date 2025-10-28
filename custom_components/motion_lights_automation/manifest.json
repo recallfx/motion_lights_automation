@@ -6,6 +6,7 @@
   ],
   "config_flow": true,
   "dependencies": [],
+  "after_dependencies": ["light"],
   "documentation": "https://github.com/recallfx/motion_lights_automation",
   "integration_type": "service",
   "iot_class": "calculated",
