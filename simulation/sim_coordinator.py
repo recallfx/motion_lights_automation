@@ -564,6 +564,7 @@ class SimMotionCoordinator:
 
         light = self._lights[entity_id]
         old_is_on = light.is_on
+        old_brightness = light.brightness_pct
 
         light.is_on = state
         light.brightness_pct = brightness if state else 0
@@ -587,6 +588,9 @@ class SimMotionCoordinator:
                 # Some lights still on - still a manual intervention
                 # Transition from auto states to manual states
                 self._handle_manual_intervention_partial_off()
+        elif state and old_is_on and brightness != old_brightness:
+            # Brightness changed while light was on - manual adjustment
+            self._handle_manual_brightness_change()
 
         self._notify_listeners()
 
@@ -615,6 +619,7 @@ class SimMotionCoordinator:
 
         When in auto states and user turns off one light but others remain on,
         this is still a manual intervention - transition to manual state.
+        In MANUAL state, restart the extended timer.
         """
         if self._current_state == STATE_MOTION_AUTO:
             # Motion active, user turned off a light - go to MOTION_MANUAL
@@ -622,6 +627,25 @@ class SimMotionCoordinator:
         elif self._current_state == STATE_AUTO:
             # No motion, user turned off a light - go to MANUAL
             self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif self._current_state == STATE_MANUAL:
+            # Already in MANUAL, restart extended timer
+            self._restart_timer(TimerType.EXTENDED)
+
+    def _handle_manual_brightness_change(self) -> None:
+        """Handle manual brightness change while light is on.
+
+        When user changes brightness in auto states, treat as manual intervention.
+        In MANUAL state, restart the extended timer.
+        """
+        if self._current_state == STATE_MOTION_AUTO:
+            # Motion active, user changed brightness - go to MOTION_MANUAL
+            self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif self._current_state == STATE_AUTO:
+            # No motion, user changed brightness - go to MANUAL
+            self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif self._current_state == STATE_MANUAL:
+            # Already in MANUAL, restart extended timer
+            self._restart_timer(TimerType.EXTENDED)
 
     # ========================================================================
     # Configuration Changes

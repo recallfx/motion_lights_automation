@@ -103,6 +103,26 @@ export class FlowDiagram extends LitElement {
         .arrow-head.active {
             fill: #00ff88;
         }
+        .brightness-btn {
+            cursor: pointer;
+            fill: #0f3460;
+            stroke: #2a2a4a;
+            stroke-width: 1.5;
+        }
+        .brightness-btn:hover {
+            fill: #1a4a80;
+            stroke: #00d9ff;
+        }
+        .brightness-btn-text {
+            fill: #888;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: inherit;
+            pointer-events: none;
+        }
+        .brightness-btn:hover + .brightness-btn-text {
+            fill: #00d9ff;
+        }
     `;
 
     constructor() {
@@ -197,6 +217,23 @@ export class FlowDiagram extends LitElement {
         `;
     }
 
+    _renderBrightnessControls(x, y) {
+        const btnSize = 22;
+        const gap = 6;
+        return svg`
+            <g class="brightness-controls">
+                <g @click=${() => store.setLightBrightness(this._lightBrightness - 10)}>
+                    <rect class="brightness-btn" x="${x}" y="${y}" width="${btnSize}" height="${btnSize}" rx="4"/>
+                    <text class="brightness-btn-text" x="${x + btnSize/2}" y="${y + btnSize/2 + 5}" text-anchor="middle">−</text>
+                </g>
+                <g @click=${() => store.setLightBrightness(this._lightBrightness + 10)}>
+                    <rect class="brightness-btn" x="${x + btnSize + gap}" y="${y}" width="${btnSize}" height="${btnSize}" rx="4"/>
+                    <text class="brightness-btn-text" x="${x + btnSize + gap + btnSize/2}" y="${y + btnSize/2 + 5}" text-anchor="middle">+</text>
+                </g>
+            </g>
+        `;
+    }
+
     render() {
         const coordState = this._getCoordinatorState();
 
@@ -231,8 +268,8 @@ export class FlowDiagram extends LitElement {
         const darkX = lightX + (nodeW - inputsTotalW) / 2;
         const houseX = darkX + smallW + 10;
 
-        // SVG dimensions - ensure all elements fit
-        const svgWidth = Math.max(lightX + nodeW + 20, houseX + smallW + 20);
+        // SVG dimensions - ensure all elements fit (extra space for brightness controls)
+        const svgWidth = Math.max(lightX + nodeW + 70, houseX + smallW + 20);
         const svgHeight = inputsY + smallH + 20;
 
         return html`
@@ -311,6 +348,9 @@ export class FlowDiagram extends LitElement {
                         this._lightOn ? 'On' : 'Off',
                         { active: this._lightOn, onClick: () => store.toggleLight() }
                     )}
+
+                    <!-- Brightness Controls -->
+                    ${this._renderBrightnessControls(lightX + nodeW + 8, lightY + nodeH/2 - 11)}
 
                     <!-- Node: Dark Inside -->
                     ${this._renderNode(darkX, inputsY, smallW, smallH,

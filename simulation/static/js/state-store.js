@@ -141,6 +141,20 @@ class StateStore {
         }
     }
 
+    setLightBrightness(brightness) {
+        const light = Object.entries(this.lights)[0];
+        if (light) {
+            const newBrightness = Math.max(0, Math.min(100, brightness));
+            this.send({
+                type: 'light_event',
+                light_id: light[0],
+                action: newBrightness === 0 ? 'turn_off' : 'turn_on',
+                brightness: newBrightness,
+                is_manual: true
+            });
+        }
+    }
+
     setConfig(key, value) {
         this.send({ type: 'config_change', key, value });
     }
