@@ -26,11 +26,6 @@ export class StateMachine extends LitElement {
             color: var(--text-dim, #888);
             margin-bottom: 16px;
         }
-        .state-display {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-        }
         .current-state {
             background: var(--bg-component, #0f3460);
             border: 2px solid var(--accent, #00d9ff);
@@ -49,36 +44,7 @@ export class StateMachine extends LitElement {
             color: var(--text-dim, #888);
             margin-top: 4px;
         }
-        .state-transitions {
-            flex: 1;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .state-chip {
-            background: var(--bg-component, #0f3460);
-            border: 1px solid var(--border, #2a2a4a);
-            border-radius: 4px;
-            padding: 6px 12px;
-            font-size: 10px;
-            color: var(--text-dim, #888);
-            text-transform: uppercase;
-        }
-        .state-chip.available {
-            border-color: var(--accent-dim, #006680);
-            color: var(--accent, #00d9ff);
-        }
     `;
-
-    static STATES = [
-        { id: 'standby', label: 'Standby' },
-        { id: 'motion-detected', label: 'Motion Detected' },
-        { id: 'auto-timeout', label: 'Auto Timeout' },
-        { id: 'manual-timeout', label: 'Manual Timeout' },
-        { id: 'motion-adjusted', label: 'Motion Adjusted' },
-        { id: 'manual-off', label: 'Manual Off' },
-        { id: 'disabled', label: 'Disabled' },
-    ];
 
     constructor() {
         super();
@@ -113,16 +79,9 @@ export class StateMachine extends LitElement {
         return html`
             <div class="state-section">
                 <div class="section-title">State Machine</div>
-                <div class="state-display">
-                    <div class="current-state">
-                        <div class="state-name">${this._currentState.toUpperCase().replace('-', ' ')}</div>
-                        <div class="state-time">${this._formatDuration(this._timeInState)} in state</div>
-                    </div>
-                    <div class="state-transitions">
-                        ${StateMachine.STATES.map(s => html`
-                            <div class="state-chip ${s.id === this._currentState ? 'available' : ''}">${s.label}</div>
-                        `)}
-                    </div>
+                <div class="current-state">
+                    <div class="state-name">${this._currentState.toUpperCase().replace('-', ' ')}</div>
+                    <div class="state-time">${this._formatDuration(this._timeInState)} in state</div>
                 </div>
             </div>
         `;
