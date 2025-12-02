@@ -613,13 +613,16 @@ class SimMotionCoordinator:
             STATE_MOTION_MANUAL,
         ):
             self._transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+        elif self._current_state == STATE_MANUAL_OFF:
+            # Already in MANUAL_OFF, another light turned off - restart extended timer
+            self._restart_timer(TimerType.EXTENDED)
 
     def _handle_manual_intervention_partial_off(self) -> None:
         """Handle manual light turn off when some lights remain on.
 
         When in auto states and user turns off one light but others remain on,
         this is still a manual intervention - transition to manual state.
-        In MANUAL state, restart the extended timer.
+        In MANUAL/MANUAL_OFF state, restart the extended timer.
         """
         if self._current_state == STATE_MOTION_AUTO:
             # Motion active, user turned off a light - go to MOTION_MANUAL
@@ -627,15 +630,15 @@ class SimMotionCoordinator:
         elif self._current_state == STATE_AUTO:
             # No motion, user turned off a light - go to MANUAL
             self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
-        elif self._current_state == STATE_MANUAL:
-            # Already in MANUAL, restart extended timer
+        elif self._current_state in (STATE_MANUAL, STATE_MANUAL_OFF):
+            # Already in MANUAL or MANUAL_OFF, restart extended timer
             self._restart_timer(TimerType.EXTENDED)
 
     def _handle_manual_brightness_change(self) -> None:
         """Handle manual brightness change while light is on.
 
         When user changes brightness in auto states, treat as manual intervention.
-        In MANUAL state, restart the extended timer.
+        In MANUAL/MANUAL_OFF state, restart the extended timer (MANUAL_OFF also transitions to MANUAL).
         """
         if self._current_state == STATE_MOTION_AUTO:
             # Motion active, user changed brightness - go to MOTION_MANUAL
@@ -646,6 +649,9 @@ class SimMotionCoordinator:
         elif self._current_state == STATE_MANUAL:
             # Already in MANUAL, restart extended timer
             self._restart_timer(TimerType.EXTENDED)
+        elif self._current_state == STATE_MANUAL_OFF:
+            # User is active again, transition to MANUAL
+            self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
 
     # ========================================================================
     # Configuration Changes

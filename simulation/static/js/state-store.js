@@ -142,16 +142,33 @@ class StateStore {
     }
 
     setLightBrightness(brightness) {
-        const light = Object.entries(this.lights)[0];
-        if (light) {
-            const newBrightness = Math.max(0, Math.min(100, brightness));
-            this.send({
-                type: 'light_event',
-                light_id: light[0],
-                action: newBrightness === 0 ? 'turn_off' : 'turn_on',
-                brightness: newBrightness,
-                is_manual: true
+        const newBrightness = Math.max(0, Math.min(100, brightness));
+        // When brightness goes to 0, turn off all lights (like main toggle)
+        // Otherwise, adjust brightness on first light
+        if (newBrightness === 0) {
+            // Turn off all lights
+            Object.entries(this.lights).forEach(([id, light]) => {
+                if (light.is_on) {
+                    this.send({
+                        type: 'light_event',
+                        light_id: id,
+                        action: 'turn_off',
+                        brightness: 0,
+                        is_manual: true
+                    });
+                }
             });
+        } else {
+            const light = Object.entries(this.lights)[0];
+            if (light) {
+                this.send({
+                    type: 'light_event',
+                    light_id: light[0],
+                    action: 'turn_on',
+                    brightness: newBrightness,
+                    is_manual: true
+                });
+            }
         }
     }
 
