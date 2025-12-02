@@ -191,7 +191,10 @@ class MotionLightsStateMachine:
         self._add_transition(
             STATE_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
         )
-        # MANUAL state handles LIGHTS_ALL_OFF via MANUAL_OFF_INTERVENTION instead
+        # MANUAL state: external automation turning off lights (not detected as manual intervention)
+        self._add_transition(
+            STATE_MANUAL, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
+        )
         self._add_transition(
             STATE_MOTION_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
         )

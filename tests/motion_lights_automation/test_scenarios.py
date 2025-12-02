@@ -63,7 +63,7 @@ class TestManualOffScenarios:
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
         """Test that lights stay off when user turns them off during active motion.
-        
+
         This is the critical bug fix test:
         1. Motion detected -> lights turn on (MOTION_AUTO)
         2. User manually turns off light
@@ -91,7 +91,9 @@ class TestManualOffScenarios:
 
             # User manually turns off the light
             with patch.object(
-                coordinator.light_controller, "is_integration_context", return_value=False
+                coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
             ):
                 hass.states.async_set("light.ceiling", "off")
                 await hass.async_block_till_done()
@@ -185,7 +187,9 @@ class TestManualOffScenarios:
 
             # User turns off one light (but lamp stays on)
             with patch.object(
-                coordinator.light_controller, "is_integration_context", return_value=False
+                coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
             ):
                 hass.states.async_set("light.ceiling", "off")
                 await hass.async_block_till_done()
@@ -284,9 +288,13 @@ class TestManualBrightnessScenarios:
 
             # User changes brightness significantly
             with patch.object(
-                coordinator.light_controller, "is_integration_context", return_value=False
+                coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
             ):
-                hass.states.async_set("light.ceiling", "on", attributes={"brightness": 50})
+                hass.states.async_set(
+                    "light.ceiling", "on", attributes={"brightness": 50}
+                )
                 await hass.async_block_till_done()
 
             # Should be in MOTION_MANUAL (brightness change, not off)

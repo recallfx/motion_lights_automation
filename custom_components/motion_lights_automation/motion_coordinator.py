@@ -398,6 +398,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "motion_off", {"current_state": self.state_machine.current_state}
             )
 
+            # Cancel motion delay timer if motion clears during delay
+            self.timer_manager.cancel_timer("motion_delay")
+
             current = self.state_machine.current_state
 
             if current == STATE_MOTION_AUTO:
@@ -417,6 +420,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "override_on", {"current_state": self.state_machine.current_state}
             )
             self._log_human_event("Automation overridden")
+            # Cancel motion delay timer explicitly (not managed by cancel_all_timers if CUSTOM type)
+            self.timer_manager.cancel_timer("motion_delay")
             self.timer_manager.cancel_all_timers()
             result = self.state_machine.transition(StateTransitionEvent.OVERRIDE_ON)
             _LOGGER.info(
@@ -519,7 +524,12 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # If we transitioned to MANUAL_OFF, don't process LIGHTS_ALL_OFF
                     if (
                         old_state_before_intervention
-                        in (STATE_AUTO, STATE_MANUAL, STATE_MOTION_AUTO, STATE_MOTION_MANUAL)
+                        in (
+                            STATE_AUTO,
+                            STATE_MANUAL,
+                            STATE_MOTION_AUTO,
+                            STATE_MOTION_MANUAL,
+                        )
                         and self.state_machine.current_state == STATE_MANUAL_OFF
                     ):
                         manual_intervention_handled = True
@@ -902,7 +912,19 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_timer_expired(self, timer_id: str = None) -> None:
         """Timer expired - transition to idle."""
-        _LOGGER.info("Timer expired: %s", timer_id)
+        current = self.state_machine.current_state
+
+        # Validate state before acting - timer may have been scheduled before state change
+        valid_states_for_timer = (STATE_AUTO, STATE_MANUAL, STATE_MANUAL_OFF)
+        if current not in valid_states_for_timer:
+            _LOGGER.debug(
+                "Timer '%s' expired but current state %s doesn't accept TIMER_EXPIRED - ignoring",
+                timer_id,
+                current,
+            )
+            return
+
+        _LOGGER.info("Timer expired: %s (state: %s)", timer_id, current)
         self.state_machine.transition(StateTransitionEvent.TIMER_EXPIRED)
 
     async def _async_motion_delay_expired(self, timer_id: str = None) -> None:

@@ -90,7 +90,7 @@ class Timer:
         self._handle = None
 
         try:
-            await self.callback()
+            await self.callback(self.name)
         except Exception as err:
             _LOGGER.error("Error in timer callback for '%s': %s", self.name, err)
 
