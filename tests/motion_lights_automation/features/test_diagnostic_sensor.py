@@ -93,8 +93,11 @@ async def test_diagnostic_sensor_tracks_events(hass: HomeAssistant) -> None:
     event_log = diagnostic_state.attributes.get("event_log", [])
     assert len(event_log) > 0
 
-    # Event log should contain human-readable messages
-    assert any("motion" in event.lower() for event in event_log)
+    # Event log should contain motion-related event
+    # The format may vary, so check for common patterns
+    assert len(event_log) > 0, "Event log should not be empty after motion"
+    log_text = " ".join(event_log).lower()
+    assert "motion" in log_text, f"Expected 'motion' in event log: {event_log}"
 
     # Cleanup
     coordinator = config_entry.runtime_data

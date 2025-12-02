@@ -67,12 +67,27 @@ class TestMotionTrigger:
 
         assert trigger.is_active() is False
 
-    def test_motion_trigger_is_active_when_disabled(self, hass: HomeAssistant):
-        """Test is_active when trigger is disabled."""
+    def test_motion_trigger_is_active_ignores_enabled_state(self, hass: HomeAssistant):
+        """Test is_active returns motion state regardless of enabled flag.
+
+        Note: is_active() intentionally ignores enabled state to allow
+        proper timer resets even when motion_activation is disabled.
+        """
         config = {"entity_ids": ["binary_sensor.motion1"], "enabled": False}
         trigger = MotionTrigger(hass, config)
 
+        # Even with trigger disabled, is_active reflects actual motion state
+        hass.states.async_set("binary_sensor.motion1", "on")
+        assert trigger.is_active() is True
+
+        # Motion off should return False
+        hass.states.async_set("binary_sensor.motion1", "off")
         assert trigger.is_active() is False
+
+        # Enabled state doesn't affect is_active
+        trigger.set_enabled(True)
+        hass.states.async_set("binary_sensor.motion1", "on")
+        assert trigger.is_active() is True
 
     def test_motion_trigger_set_enabled(self, hass: HomeAssistant):
         """Test set_enabled method."""
@@ -104,6 +119,17 @@ class TestMotionTrigger:
 
         trigger._async_motion_changed(event)
         activated_callback.assert_called_once()
+        deactivated_callback.assert_not_called()
+
+        # Reset mocks
+        activated_callback.reset_mock()
+        deactivated_callback.reset_mock()
+
+        # Simulate motion OFF event
+        new_state.state = "off"
+        trigger._async_motion_changed(event)
+        deactivated_callback.assert_called_once()
+        activated_callback.assert_not_called()
 
     def test_motion_trigger_get_info(self, hass: HomeAssistant):
         """Test get_info method."""

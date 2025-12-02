@@ -110,8 +110,8 @@ class TestLightController:
         assert "light.bg" in all_lights
         assert len(all_lights) == 3
 
-    def test_get_all_lights_removes_duplicates(self, hass: HomeAssistant):
-        """Test get_all_lights doesn't deduplicate (flat list behavior)."""
+    def test_get_all_lights_preserves_duplicates(self, hass: HomeAssistant):
+        """Test get_all_lights preserves duplicates (user's responsibility to avoid)."""
         lights = ["light.c1", "light.c1", "light.c1"]
         controller = LightController(hass, lights)
 

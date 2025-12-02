@@ -203,6 +203,13 @@ class SimMotionCoordinator:
 
         # Timer manager
         self._timer_manager = SimTimerManager(on_timer_expired=self._on_timer_expired)
+        # Set default durations from config
+        self._timer_manager.set_default_duration(
+            TimerType.MOTION, self.config.no_motion_wait
+        )
+        self._timer_manager.set_default_duration(
+            TimerType.EXTENDED, self.config.extended_timeout
+        )
 
         # Entities
         self._lights: dict[str, SimLight] = {}
@@ -329,6 +336,10 @@ class SimMotionCoordinator:
             self._start_timer(
                 "extended", TimerType.EXTENDED, self.config.extended_timeout
             )
+        elif state == STATE_MOTION_MANUAL:
+            # Motion detected with manual lights - cancel timers (motion keeps lights on)
+            self._cancel_timer("extended")
+            self._cancel_timer("motion")
         elif state == STATE_MANUAL_OFF:
             self._cancel_timer("motion")
             self._start_timer(
@@ -346,6 +357,14 @@ class SimMotionCoordinator:
     def _start_timer(self, name: str, timer_type: TimerType, duration: int) -> None:
         """Start a timer using timer manager."""
         self._timer_manager.start_timer(name, timer_type, duration)
+
+    def _restart_timer(self, timer_type: TimerType) -> None:
+        """Restart a timer by type (cancel existing and start fresh)."""
+        # Get timer name from type
+        name = timer_type.value  # "motion" or "extended"
+        duration = self._timer_manager._default_durations.get(timer_type, 120)
+        self._cancel_timer(name)
+        self._start_timer(name, timer_type, duration)
 
     def _cancel_timer(self, name: str) -> bool:
         """Cancel a specific timer."""
@@ -473,21 +492,43 @@ class SimMotionCoordinator:
 
     def _handle_motion_on(self) -> None:
         """Handle motion detected."""
-        if not self.config.motion_activation:
-            # Still reset timers even if motion activation is disabled
-            if self._current_state in (STATE_MANUAL, STATE_AUTO, STATE_MANUAL_OFF):
-                self._cancel_timer("extended")
-                self._start_timer(
-                    "extended", TimerType.EXTENDED, self.config.extended_timeout
-                )
-            return
-
+        # State transitions based on current state
         if self._current_state == STATE_MANUAL:
+            # Manual lights on, motion detected -> motion-adjusted
+            # This cancels the extended timer (motion keeps lights on)
             self._transition(StateTransitionEvent.MOTION_ON)
         elif self._current_state == STATE_AUTO:
+            # Auto lights on, motion detected -> motion-detected
             self._cancel_all_timers()
             self._transition(StateTransitionEvent.MOTION_ON)
-        elif self._current_state in (STATE_IDLE, STATE_MANUAL_OFF):
+        elif self._current_state == STATE_MANUAL_OFF:
+            # User turned lights off - cancel timer while they're present
+            # Timer will restart when motion clears
+            self._cancel_timer("extended")
+            _LOGGER.debug(
+                "Motion detected in %s - extended timer paused while user present",
+                self._current_state,
+            )
+
+            # Only activate lights if motion_activation is enabled
+            if not self.config.motion_activation:
+                return
+
+            if self.config.motion_delay > 0:
+                self._start_timer(
+                    "motion_delay", TimerType.CUSTOM, self.config.motion_delay
+                )
+            else:
+                self._transition(StateTransitionEvent.MOTION_ON)
+        elif self._current_state == STATE_IDLE:
+            # Only activate lights if motion_activation is enabled
+            if not self.config.motion_activation:
+                _LOGGER.debug(
+                    "Motion detected in %s but motion_activation=False - not activating lights",
+                    self._current_state,
+                )
+                return
+
             if self.config.motion_delay > 0:
                 self._start_timer(
                     "motion_delay", TimerType.CUSTOM, self.config.motion_delay
@@ -503,6 +544,12 @@ class SimMotionCoordinator:
             self._transition(StateTransitionEvent.MOTION_OFF)
         elif self._current_state == STATE_MOTION_MANUAL:
             self._transition(StateTransitionEvent.MOTION_OFF)
+        elif self._current_state == STATE_MANUAL_OFF:
+            # User left the room - restart extended timer
+            _LOGGER.debug(
+                "Motion cleared in %s - restarting extended timer", self._current_state
+            )
+            self._restart_timer(TimerType.EXTENDED)
 
     # ========================================================================
     # Light Control Events (called from server)

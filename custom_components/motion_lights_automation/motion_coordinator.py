@@ -200,6 +200,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.state_machine.on_enter_state(STATE_MOTION_AUTO, self._on_enter_motion_auto)
         self.state_machine.on_enter_state(STATE_AUTO, self._on_enter_auto)
         self.state_machine.on_enter_state(STATE_MANUAL, self._on_enter_manual)
+        self.state_machine.on_enter_state(
+            STATE_MOTION_MANUAL, self._on_enter_motion_manual
+        )
         self.state_machine.on_enter_state(STATE_MANUAL_OFF, self._on_enter_manual_off)
         self.state_machine.on_enter_state(STATE_IDLE, self._on_enter_idle)
         self.state_machine.on_transition(self._on_transition)
@@ -336,43 +339,56 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Motion ON")
             self._log_event("motion_on", {"motion_activation": self.motion_activation})
 
-            if not self.motion_activation:
-                # When motion_activation is disabled, motion doesn't turn on lights automatically.
-                # However, if lights are already on (manually), restart the timer to prevent
-                # premature shutoff while the room is actively being used.
-                current = self.state_machine.current_state
-                if current in (STATE_MANUAL, STATE_AUTO):
-                    _LOGGER.debug(
-                        "Motion detected with motion_activation=False in state %s; restarting extended timer",
-                        current,
-                    )
-                    self.timer_manager.cancel_timer("extended")
-                    self.timer_manager.start_timer(
-                        "extended",
-                        TimerType.EXTENDED,
-                        self._async_timer_expired,
-                    )
-                elif current == STATE_MANUAL_OFF:
-                    # User manually turned off lights but motion detected - restart timer
-                    _LOGGER.debug(
-                        "Motion detected with motion_activation=False in MANUAL_OFF state; restarting extended timer"
-                    )
-                    self.timer_manager.cancel_timer("extended")
-                    self.timer_manager.start_timer(
-                        "extended",
-                        TimerType.EXTENDED,
-                        self._async_timer_expired,
-                    )
-                return
-
             current = self.state_machine.current_state
 
+            # State transitions based on current state
             if current == STATE_MANUAL:
+                # Manual lights on, motion detected -> motion-adjusted
+                # This cancels the extended timer (motion keeps lights on)
                 self.state_machine.transition(StateTransitionEvent.MOTION_ON)
             elif current == STATE_AUTO:
+                # Auto lights on, motion detected -> motion-detected
                 self.timer_manager.cancel_all_timers()
                 self.state_machine.transition(StateTransitionEvent.MOTION_ON)
-            elif current in (STATE_IDLE, STATE_MANUAL_OFF):
+            elif current == STATE_MANUAL_OFF:
+                # User turned lights off - cancel timer while they're present
+                # Timer will restart when motion clears
+                self.timer_manager.cancel_timer("extended")
+                _LOGGER.debug(
+                    "Motion detected in %s - extended timer paused while user present",
+                    current,
+                )
+
+                # Only activate lights if motion_activation is enabled
+                if not self.motion_activation:
+                    return
+
+                # Check if motion delay is configured
+                if self._motion_delay > 0:
+                    _LOGGER.debug(
+                        "Motion detected in %s state, starting %ds delay timer",
+                        current,
+                        self._motion_delay,
+                    )
+                    # Start delay timer - will trigger activation if motion still active
+                    self.timer_manager.start_timer(
+                        "motion_delay",
+                        TimerType.CUSTOM,
+                        self._async_motion_delay_expired,
+                        duration=self._motion_delay,
+                    )
+                else:
+                    # No delay - immediate activation
+                    self.state_machine.transition(StateTransitionEvent.MOTION_ON)
+            elif current == STATE_IDLE:
+                # Only activate lights if motion_activation is enabled
+                if not self.motion_activation:
+                    _LOGGER.debug(
+                        "Motion detected in %s but motion_activation=False - not activating lights",
+                        current,
+                    )
+                    return
+
                 # Check if motion delay is configured
                 if self._motion_delay > 0:
                     _LOGGER.debug(
@@ -410,6 +426,17 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
             elif current == STATE_MOTION_MANUAL:
                 self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+            elif current == STATE_MANUAL_OFF:
+                # User left the room - restart extended timer
+                _LOGGER.debug(
+                    "Motion cleared in %s - restarting extended timer", current
+                )
+                self.timer_manager.cancel_timer("extended")
+                self.timer_manager.start_timer(
+                    "extended",
+                    TimerType.EXTENDED,
+                    self._async_timer_expired,
+                )
         except Exception:
             _LOGGER.exception("Error in motion OFF handler")
 
@@ -866,8 +893,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Only log if transitioning from a state where lights were off or auto-controlled
         if from_state in (STATE_IDLE, STATE_MOTION_AUTO, STATE_AUTO, STATE_MANUAL_OFF):
             self._log_human_event("Lights turned on manually")
-        elif from_state == STATE_MOTION_MANUAL:
-            self._log_human_event("Lights adjusted manually")
+        elif from_state in (STATE_MOTION_MANUAL,):
+            self._log_human_event("Motion cleared - starting timeout")
         # If from STATE_MANUAL, it's just re-entry, don't log
 
         self.timer_manager.cancel_timer("motion")
@@ -876,6 +903,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             TimerType.EXTENDED,
             self._async_timer_expired,
         )
+
+    def _on_enter_motion_manual(self, state=None, from_state=None, event=None) -> None:
+        """Entering MOTION_MANUAL - cancel timers while motion is active."""
+        _LOGGER.debug(
+            "Entering MOTION_MANUAL state - cancelling timers (motion keeps lights on)"
+        )
+        self._log_human_event("Motion detected - timeout paused")
+        # Cancel extended timer - motion keeps lights on
+        self.timer_manager.cancel_timer("extended")
+        self.timer_manager.cancel_timer("motion")
 
     def _on_enter_manual_off(self, state=None, from_state=None, event=None) -> None:
         """Entering MANUAL_OFF - start extended timer."""

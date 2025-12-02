@@ -327,43 +327,5 @@ class TestReconfigureFlow:
         assert result["errors"] == {"base": "cannot_connect"}
 
 
-class TestValidation:
-    """Test validation functions."""
-
-    def test_validate_input_success(self, hass: HomeAssistant):
-        """Test successful validation."""
-        # We can't directly import validate_input due to relative imports
-        # Instead, test through the flow
-        pass
-
-    def test_validate_input_missing_motion_entity(self, hass: HomeAssistant):
-        """Test validation with missing motion entity - tested via flow."""
-        pass
-
-    def test_validate_input_missing_light(self, hass: HomeAssistant):
-        """Test validation with missing light entity - tested via flow."""
-        pass
-
-    def test_validate_input_default_name(self, hass: HomeAssistant):
-        """Test validation with no name provided - tested via flow."""
-        pass
-
-
-class TestSchemaHelpers:
-    """Test schema helper functions."""
-
-    def test_get_user_schema_default(self):
-        """Test user schema with defaults - tested via flow."""
-        pass
-
-    def test_get_user_schema_with_data(self):
-        """Test user schema with existing data - tested via flow."""
-        pass
-
-    def test_get_advanced_schema_default(self):
-        """Test advanced schema with defaults - tested via flow."""
-        pass
-
-    def test_get_advanced_schema_with_data(self):
-        """Test advanced schema with existing data - tested via flow."""
-        pass
+# Note: Validation and schema helper functions are tested via the flow tests above.
+# Direct unit tests were removed as they were empty placeholders.
