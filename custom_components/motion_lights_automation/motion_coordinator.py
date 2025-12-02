@@ -519,7 +519,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # If we transitioned to MANUAL_OFF, don't process LIGHTS_ALL_OFF
                     if (
                         old_state_before_intervention
-                        in (STATE_AUTO, STATE_MANUAL, STATE_MOTION_MANUAL)
+                        in (STATE_AUTO, STATE_MANUAL, STATE_MOTION_AUTO, STATE_MOTION_MANUAL)
                         and self.state_machine.current_state == STATE_MANUAL_OFF
                     ):
                         manual_intervention_handled = True
@@ -556,6 +556,18 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         if current == STATE_MOTION_AUTO:
+            # Check if user turned off all lights
+            if new_state.state == "off" and old_state.state == "on":
+                if not self.light_controller.any_lights_on():
+                    # All lights turned off, transition to MANUAL_OFF to block auto-on
+                    _LOGGER.info(
+                        "User turned off all lights in MOTION_AUTO state - transitioning to MANUAL_OFF"
+                    )
+                    self.state_machine.transition(
+                        StateTransitionEvent.MANUAL_OFF_INTERVENTION
+                    )
+                    return  # Don't continue processing
+            # Otherwise, user adjusted brightness or turned on more lights
             self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
         elif current == STATE_MOTION_MANUAL:
             # Check if user turned off all lights during motion manual state
