@@ -31,7 +31,7 @@ class TestMotionLightsSensorBasics:
     def test_sensor_attributes_structure(self) -> None:
         """Test sensor attributes structure."""
         attributes = {
-            "current_state": "idle",
+            "current_state": "standby",
             "motion_detected": False,
             "override_active": False,
             "timer_active": False,
@@ -64,13 +64,13 @@ class TestMotionLightsSensorBasics:
     def test_sensor_state_values(self) -> None:
         """Test sensor can have various state values."""
         valid_states = [
-            "idle",
-            "motion-auto",
-            "motion-manual",
-            "auto",
-            "manual",
+            "standby",
+            "motion-detected",
+            "motion-adjusted",
+            "auto-timeout",
+            "manual-timeout",
             "manual-off",
-            "overridden",
+            "disabled",
         ]
 
         for state in valid_states:

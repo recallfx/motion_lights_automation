@@ -18,10 +18,11 @@ from typing import Any, Callable
 from custom_components.motion_lights_automation.base_state_machine import (
     BaseStateMachine,
     StateTransitionEvent,
+    # New clearer state constants
+    STATE_MANUAL_OFF,
     STATE_IDLE,
     STATE_AUTO,
     STATE_MANUAL,
-    STATE_MANUAL_OFF,
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
     STATE_OVERRIDDEN,
@@ -533,7 +534,12 @@ class SimMotionCoordinator:
         elif not state and old_is_on:
             # Light turned off manually
             if not self._any_lights_on():
+                # All lights off - transition to MANUAL_OFF
                 self._handle_manual_intervention_off()
+            else:
+                # Some lights still on - still a manual intervention
+                # Transition from auto states to manual states
+                self._handle_manual_intervention_partial_off()
 
         self._notify_listeners()
 
@@ -556,6 +562,19 @@ class SimMotionCoordinator:
             STATE_MOTION_MANUAL,
         ):
             self._transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+
+    def _handle_manual_intervention_partial_off(self) -> None:
+        """Handle manual light turn off when some lights remain on.
+
+        When in auto states and user turns off one light but others remain on,
+        this is still a manual intervention - transition to manual state.
+        """
+        if self._current_state == STATE_MOTION_AUTO:
+            # Motion active, user turned off a light - go to MOTION_MANUAL
+            self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
+        elif self._current_state == STATE_AUTO:
+            # No motion, user turned off a light - go to MANUAL
+            self._transition(StateTransitionEvent.MANUAL_INTERVENTION)
 
     # ========================================================================
     # Configuration Changes

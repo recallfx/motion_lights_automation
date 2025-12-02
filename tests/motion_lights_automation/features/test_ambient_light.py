@@ -31,6 +31,7 @@ from custom_components.motion_lights_automation.const import (
 )
 from custom_components.motion_lights_automation.state_machine import (
     STATE_IDLE,
+    STATE_MANUAL,
     STATE_MOTION_AUTO,
 )
 from custom_components.motion_lights_automation.light_controller import (
@@ -435,13 +436,13 @@ class TestAmbientStateChanges:
         coordinator = MotionLightsCoordinator(hass, basic_ambient_entry)
         await coordinator.async_setup_listeners()
 
-        assert coordinator.state_machine.current_state == "idle"
+        assert coordinator.state_machine.current_state == STATE_IDLE
 
         # Become dark - should activate lights
         hass.states.async_set("binary_sensor.ambient_light", STATE_ON)
         await hass.async_block_till_done()
 
-        assert coordinator.state_machine.current_state == "motion-auto"
+        assert coordinator.state_machine.current_state == STATE_MOTION_AUTO
         coordinator.async_cleanup_listeners()
 
     async def test_becoming_bright_turns_off_auto_lights(
@@ -458,7 +459,7 @@ class TestAmbientStateChanges:
         # Turn on motion
         hass.states.async_set("binary_sensor.motion", STATE_ON)
         await hass.async_block_till_done()
-        assert coordinator.state_machine.current_state == "motion-auto"
+        assert coordinator.state_machine.current_state == STATE_MOTION_AUTO
 
         # Become bright - should turn off lights
         with patch.object(
@@ -481,7 +482,7 @@ class TestAmbientStateChanges:
         coordinator = MotionLightsCoordinator(hass, basic_ambient_entry)
         await coordinator.async_setup_listeners()
 
-        coordinator.state_machine.force_state("manual")
+        coordinator.state_machine.force_state(STATE_MANUAL)
 
         with patch.object(
             coordinator.light_controller, "turn_off_lights", new_callable=AsyncMock
@@ -490,7 +491,7 @@ class TestAmbientStateChanges:
             await hass.async_block_till_done()
             mock_turn_off.assert_not_called()
 
-        assert coordinator.state_machine.current_state == "manual"
+        assert coordinator.state_machine.current_state == STATE_MANUAL
         coordinator.async_cleanup_listeners()
 
 
@@ -535,7 +536,7 @@ class TestHouseActiveIntegration:
         # Turn on motion
         hass.states.async_set("binary_sensor.motion", STATE_ON)
         await hass.async_block_till_done()
-        assert coordinator.state_machine.current_state == "motion-auto"
+        assert coordinator.state_machine.current_state == STATE_MOTION_AUTO
 
         # Simulate lights on
         hass.states.async_set("light.test", STATE_ON, {"brightness": 26})

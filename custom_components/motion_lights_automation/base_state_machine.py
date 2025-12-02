@@ -14,14 +14,29 @@ from typing import Any, Callable
 
 _LOGGER = logging.getLogger(__name__)
 
-# State constants
-STATE_OVERRIDDEN = "overridden"
-STATE_IDLE = "idle"
-STATE_MOTION_AUTO = "motion-auto"
-STATE_MOTION_MANUAL = "motion-manual"
-STATE_AUTO = "auto"
-STATE_MANUAL = "manual"
+# State constants - named for clarity about what they represent
+# STANDBY: Ready and waiting, lights off
+# MOTION_DETECTED: Motion active, lights auto-controlled
+# AUTO_TIMEOUT: No motion, auto-controlled lights timing out
+# MOTION_ADJUSTED: Motion active, user has adjusted lights
+# MANUAL_TIMEOUT: User-controlled lights timing out
+# MANUAL_OFF: User turned off lights, blocking auto-on until timeout
+# DISABLED: Override switch active, automation disabled
+STATE_DISABLED = "disabled"
+STATE_STANDBY = "standby"
+STATE_MOTION_DETECTED = "motion-detected"
+STATE_MOTION_ADJUSTED = "motion-adjusted"
+STATE_AUTO_TIMEOUT = "auto-timeout"
+STATE_MANUAL_TIMEOUT = "manual-timeout"
 STATE_MANUAL_OFF = "manual-off"
+
+# Legacy aliases for backward compatibility during migration
+STATE_OVERRIDDEN = STATE_DISABLED
+STATE_IDLE = STATE_STANDBY
+STATE_MOTION_AUTO = STATE_MOTION_DETECTED
+STATE_MOTION_MANUAL = STATE_MOTION_ADJUSTED
+STATE_AUTO = STATE_AUTO_TIMEOUT
+STATE_MANUAL = STATE_MANUAL_TIMEOUT
 
 
 class StateTransitionEvent(Enum):

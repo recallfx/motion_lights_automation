@@ -20,7 +20,7 @@ class StateStore {
     get connected() { return this._connected; }
 
     // Computed getters
-    get currentState() { return this._state.current_state || 'idle'; }
+    get currentState() { return this._state.current_state || 'standby'; }
     get timeInState() { return this._state.time_in_state || 0; }
     get lights() { return this._state.lights || {}; }
     get sensors() { return this._state.sensors || {}; }

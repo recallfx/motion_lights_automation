@@ -9,6 +9,7 @@ import { store } from './state-store.js';
 import './app-header.js';
 import './flow-component.js';
 import './state-machine.js';
+import './state-flow.js';
 import './timer-display.js';
 import './event-log.js';
 import './config-panel.js';

@@ -71,13 +71,13 @@ export class StateMachine extends LitElement {
     `;
 
     static STATES = [
-        { id: 'idle', label: 'Idle' },
-        { id: 'motion-auto', label: 'Motion Auto' },
-        { id: 'auto', label: 'Auto' },
-        { id: 'manual', label: 'Manual' },
-        { id: 'motion-manual', label: 'Motion Manual' },
+        { id: 'standby', label: 'Standby' },
+        { id: 'motion-detected', label: 'Motion Detected' },
+        { id: 'auto-timeout', label: 'Auto Timeout' },
+        { id: 'manual-timeout', label: 'Manual Timeout' },
+        { id: 'motion-adjusted', label: 'Motion Adjusted' },
         { id: 'manual-off', label: 'Manual Off' },
-        { id: 'overridden', label: 'Overridden' },
+        { id: 'disabled', label: 'Disabled' },
     ];
 
     constructor() {
