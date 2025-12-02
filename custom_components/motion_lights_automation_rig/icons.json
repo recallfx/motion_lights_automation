@@ -1,7 +1,0 @@
-{
-  "services": {
-    "refresh_tracking": {
-      "service": "mdi:refresh"
-    }
-  }
-}

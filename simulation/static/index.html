@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion Lights - Control System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-panel: #16213e;
+            --bg-component: #0f3460;
+            --accent: #00d9ff;
+            --accent-dim: #006680;
+            --green: #00ff88;
+            --green-dim: #004d29;
+            --yellow: #ffcc00;
+            --yellow-dim: #4d3d00;
+            --red: #ff4757;
+            --red-dim: #4d151a;
+            --text: #e8e8e8;
+            --text-dim: #888;
+            --border: #2a2a4a;
+        }
+
+        body {
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Main Layout */
+        .dashboard {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .flow-section {
+            background: var(--bg-panel);
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid var(--border);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .dashboard {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <app-header></app-header>
+
+    <div class="dashboard">
+        <div class="flow-section">
+            <flow-diagram></flow-diagram>
+            <state-machine></state-machine>
+            <timers-section></timers-section>
+            <event-log></event-log>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

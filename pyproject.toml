@@ -9,7 +9,14 @@ dependencies = [
     "pytest-cov>=6.0.0",
     "pytest-homeassistant-custom-component>=0.13.45",
     "ruff>=0.8.0",
+    "aiohttp>=3.9.0",
 ]
+
+[project.scripts]
+motion-sim = "simulation.server:run_server"
+
+[tool.setuptools.packages.find]
+include = ["simulation*", "custom_components*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
