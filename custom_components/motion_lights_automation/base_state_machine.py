@@ -1,4 +1,4 @@
-"""State machine for motion lights automation.
+"""Base state machine for motion lights automation.
 
 This module provides a clean state machine implementation that can be used
 by both the Home Assistant integration and standalone simulation.

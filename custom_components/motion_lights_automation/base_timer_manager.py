@@ -1,4 +1,4 @@
-"""Timer management for motion lights automation.
+"""Base timer management for motion lights automation.
 
 This module provides flexible timer management that can be used by both
 the Home Assistant integration and standalone simulation.

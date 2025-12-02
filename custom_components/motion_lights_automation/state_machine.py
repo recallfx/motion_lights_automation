@@ -1,7 +1,7 @@
 """State machine for motion lights automation.
 
 This module provides a Home Assistant-specific state machine implementation
-that extends the core BaseStateMachine with HA-specific time utilities.
+that extends the BaseStateMachine with HA-specific time utilities.
 """
 
 from __future__ import annotations
@@ -10,8 +10,7 @@ from datetime import datetime
 
 from homeassistant.util import dt as dt_util
 
-# Re-export core classes for backward compatibility
-from .core import (
+from .base_state_machine import (
     BaseStateMachine,
     StateTransition,
     StateTransitionEvent,

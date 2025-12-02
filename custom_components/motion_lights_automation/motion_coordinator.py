@@ -33,6 +33,10 @@ from .const import (
     DEFAULT_MOTION_DELAY,
     DEFAULT_NO_MOTION_WAIT,
     DOMAIN,
+)
+from .state_machine import (
+    MotionLightsStateMachine,
+    StateTransitionEvent,
     STATE_AUTO,
     STATE_IDLE,
     STATE_MANUAL,
@@ -46,7 +50,6 @@ from .light_controller import (
     TimeOfDayBrightnessStrategy,
 )
 from .manual_detection import BrightnessThresholdStrategy, ManualInterventionDetector
-from .state_machine import MotionLightsStateMachine, StateTransitionEvent
 from .timer_manager import TimerManager, TimerType
 from .triggers import MotionTrigger, OverrideTrigger, TriggerManager
 

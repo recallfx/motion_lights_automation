@@ -1,7 +1,7 @@
 """Timer management for motion lights automation.
 
 This module provides Home Assistant-specific timer management that extends
-the core BaseTimerManager with HA-specific scheduling.
+the BaseTimerManager with HA-specific scheduling.
 """
 
 from __future__ import annotations
@@ -14,8 +14,7 @@ from typing import Callable
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-# Re-export core classes for backward compatibility
-from .core import (
+from .base_timer_manager import (
     BaseTimer,
     BaseTimerManager,
     TimerType,

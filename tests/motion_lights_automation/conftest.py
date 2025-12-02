@@ -32,8 +32,8 @@ from custom_components.motion_lights_automation.const import (
     DEFAULT_MOTION_ACTIVATION,
     DEFAULT_NO_MOTION_WAIT,
     DOMAIN,
-    STATE_IDLE,
 )
+from custom_components.motion_lights_automation.state_machine import STATE_IDLE
 
 
 @pytest.fixture

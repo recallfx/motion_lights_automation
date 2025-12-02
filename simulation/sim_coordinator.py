@@ -1,7 +1,7 @@
 """Simulation coordinator for motion lights automation.
 
 This module wraps the real coordinator logic for standalone operation
-without Home Assistant dependencies. Uses shared core module for
+without Home Assistant dependencies. Uses shared base modules for
 state machine logic.
 """
 
@@ -14,13 +14,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
 
-# Import from shared core module
-from custom_components.motion_lights_automation.core import (
+# Import from shared base modules
+from custom_components.motion_lights_automation.base_state_machine import (
     BaseStateMachine,
-    BaseTimer,
-    BaseTimerManager,
     StateTransitionEvent,
-    TimerType,
     STATE_IDLE,
     STATE_AUTO,
     STATE_MANUAL,
@@ -28,6 +25,11 @@ from custom_components.motion_lights_automation.core import (
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
     STATE_OVERRIDDEN,
+)
+from custom_components.motion_lights_automation.base_timer_manager import (
+    BaseTimer,
+    BaseTimerManager,
+    TimerType,
 )
 
 _LOGGER = logging.getLogger(__name__)

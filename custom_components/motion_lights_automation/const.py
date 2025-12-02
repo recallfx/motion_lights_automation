@@ -37,13 +37,6 @@ DEFAULT_MOTION_ACTIVATION = True  # Motion detection enabled by default
 DEFAULT_EXTENDED_TIMEOUT = 1200  # 20 minutes before lights turn off
 DEFAULT_MOTION_DELAY = 0  # No delay by default (instant response)
 
-
-# State constants (public strings used by sensors/diagnostics)
-# Keep this as the single source of truth for states used across the integration.
-STATE_OVERRIDDEN = "overridden"  # override=ON, ignore everything, no timers
-STATE_IDLE = "idle"  # override=OFF, no lights on
-STATE_MOTION_AUTO = "motion-auto"  # motion=ON, automation in control
-STATE_MOTION_MANUAL = "motion-manual"  # motion=ON, user has taken control
-STATE_AUTO = "auto"  # motion=OFF, MotionTimer running (automation lights on)
-STATE_MANUAL = "manual"  # motion=OFF, ExtendedTimer running (user lights on)
-STATE_MANUAL_OFF = "manual-off"  # lights turned OFF manually during AUTO, temporary override blocks auto-on until ExtendedTimer expires
+# Note: State constants (STATE_IDLE, STATE_AUTO, etc.) are defined in
+# state_machine.py and re-exported from core/state_machine.py.
+# Import them from .state_machine to avoid duplication.

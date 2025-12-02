@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 
-from custom_components.motion_lights_automation.const import (
+from custom_components.motion_lights_automation.state_machine import (
+    MotionLightsStateMachine,
+    StateTransitionEvent,
     STATE_AUTO,
     STATE_IDLE,
     STATE_MANUAL,
@@ -11,10 +13,6 @@ from custom_components.motion_lights_automation.const import (
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
     STATE_OVERRIDDEN,
-)
-from custom_components.motion_lights_automation.state_machine import (
-    MotionLightsStateMachine,
-    StateTransitionEvent,
 )
 
 

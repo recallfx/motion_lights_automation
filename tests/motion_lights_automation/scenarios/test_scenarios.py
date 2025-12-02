@@ -21,6 +21,8 @@ from custom_components.motion_lights_automation.const import (
     CONF_MOTION_ENTITY,
     CONF_NO_MOTION_WAIT,
     DOMAIN,
+)
+from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
     STATE_MANUAL,
