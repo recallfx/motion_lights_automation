@@ -10,7 +10,7 @@ Motion Lights Automation is a Home Assistant integration that provides sophistic
 
 ### Core Capabilities
 - ✅ **Multi-sensor support** - Use multiple motion sensors for a single lighting zone
-- ✅ **Three-tier lighting** - Ceiling, background, and feature lights with independent control
+- ✅ **Multi-light control** - Control multiple lights as a single zone
 - ✅ **State machine** - 7 distinct states with intelligent transitions
 - ✅ **Manual intervention detection** - Automatically detects and respects manual control
 - ✅ **Override switch** - Temporarily disable automation without removing configuration
@@ -71,14 +71,12 @@ Configure the essential entities:
 |-------|----------|-------------|
 | **Name** | Yes | Friendly name for this automation (e.g., "Kitchen Motion Lights") |
 | **Motion Sensors** | Yes | One or more motion sensors that trigger the lights |
-| **Ceiling Lights** | No | Main overhead/ceiling lights |
-| **Background Lights** | No | Ambient/background lighting |
-| **Feature Lights** | No | Accent/feature lights |
+| **Lights** | Yes | Lights to control (supports multiple) |
 | **Override Switch** | No | Switch to temporarily disable automation |
 | **House Active Switch** | No | Switch indicating house is active (for brightness control) |
 | **Ambient Light Sensor** | No | Binary sensor (e.g., sun) or lux sensor for ambient light detection |
 
-**Note:** At least one light type (ceiling, background, or feature) must be configured.
+**Note:** At least one light must be configured.
 
 ### Advanced Settings (Step 2)
 
@@ -280,7 +278,7 @@ In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.bedroom_motion`
-- Ceiling Lights: `light.bedroom_ceiling`
+- Lights: `light.bedroom_ceiling`
 - No Motion Wait: `300` (5 minutes)
 - Brightness Active: `80`
 - Brightness Inactive: `20`
@@ -291,8 +289,7 @@ In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.kitchen_motion`
-- Ceiling Lights: `light.kitchen_ceiling`
-- Background Lights: `light.kitchen_under_cabinet`
+- Lights: `light.kitchen_ceiling`, `light.kitchen_under_cabinet`
 - Ambient Light Sensor: `binary_sensor.sun_below_horizon`
 - No Motion Wait: `300`
 - Brightness Active: `100` (day mode)
@@ -308,8 +305,7 @@ In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.kitchen_motion`
-- Ceiling Lights: `light.kitchen_ceiling`
-- Background Lights: `light.kitchen_under_cabinet`
+- Lights: `light.kitchen_ceiling`, `light.kitchen_under_cabinet`
 - Ambient Light Sensor: `sensor.kitchen_illuminance` (lux sensor)
 - Ambient Light Threshold: `50` (lux)
 - No Motion Wait: `300`
@@ -329,9 +325,7 @@ In winter, it gets dark at 5 PM, but you want bright lights until bedtime (10 PM
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.living_room_motion`
-- Ceiling Lights: `light.living_room_main`
-- Background Lights: `light.living_room_lamp_1`, `light.living_room_lamp_2`
-- Feature Lights: `light.living_room_accent`
+- Lights: `light.living_room_main`, `light.living_room_lamp_1`, `light.living_room_lamp_2`, `light.living_room_accent`
 - House Active: `input_boolean.house_active`
 - No Motion Wait: `600` (10 minutes)
 - Extended Timeout: `1800` (30 minutes)
@@ -368,7 +362,7 @@ automation:
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.bathroom_motion`
-- Ceiling Lights: `light.bathroom_ceiling`
+- Lights: `light.bathroom_ceiling`
 - Override Switch: `input_boolean.bathroom_override`
 - No Motion Wait: `180` (3 minutes)
 - Brightness Active: `100`
@@ -381,19 +375,19 @@ When you have an open floor plan or connected rooms, you can create a lighting f
 
 **Entryway Configuration (First to activate):**
 - Motion Sensors: `binary_sensor.entryway_motion`
-- Ceiling Lights: `light.entryway_ceiling`
+- Lights: `light.entryway_ceiling`
 - Motion Delay: `0` (activates immediately)
 - No Motion Wait: `300`
 
 **Hallway Configuration (Second):**
 - Motion Sensors: `binary_sensor.hallway_motion`
-- Ceiling Lights: `light.hallway_ceiling`
+- Lights: `light.hallway_ceiling`
 - Motion Delay: `2` (2-second delay)
 - No Motion Wait: `300`
 
 **Living Room Configuration (Third):**
 - Motion Sensors: `binary_sensor.living_room_motion`
-- Ceiling Lights: `light.living_room_ceiling`
+- Lights: `light.living_room_ceiling`
 - Motion Delay: `4` (4-second delay)
 - No Motion Wait: `300`
 
@@ -410,34 +404,34 @@ The integration creates a sensor entity with comprehensive diagnostic informatio
 
 **Entity ID:** `sensor.<name>_lighting_automation`
 
-**State Values:**
+**State:** Human-readable event message (e.g., "Lights turned on by motion")
+
+**State Values in `current_state` attribute:**
 - `idle` - No motion, lights off
-- `motion_auto` - Motion detected, lights on automatically
-- `auto` - Automatic mode, extended timer running
-- `motion_manual` - Manual intervention during motion
+- `motion-auto` - Motion detected, lights on automatically
+- `auto` - Automatic mode, motion timer running
+- `motion-manual` - Manual intervention during motion
 - `manual` - Manual mode, extended timer running
-- `manual_off` - User manually turned off lights
+- `manual-off` - User manually turned off lights
 - `overridden` - Override switch is ON
 
-**Attributes:**
+**Key Attributes:**
 ```yaml
-current_state: auto
-timer_active: true
-time_until_action: 650
-next_action_time: "2025-10-23T10:20:15"
-motion_activation_enabled: true
-brightness_active: 80
-brightness_inactive: 10
-current_brightness_mode: active
-no_motion_wait: 300
-extended_timeout: 1200
-motion_entity: binary_sensor.kitchen_motion
-lights: light.kitchen_ceiling, light.kitchen_under_cabinet
-override_switch: input_boolean.kitchen_override
-house_active_switch: input_boolean.house_active
-ambient_light_sensor: binary_sensor.sun_below_horizon  # or sensor.kitchen_illuminance
-ambient_light_threshold: 50  # only present for lux sensors
-ambient_light_low: false  # true if below threshold or binary sensor ON
+current_state: auto                      # State machine state
+motion_active: false                     # Motion sensor state
+is_dark_inside: true                     # Ambient light condition
+is_house_active: false                   # House active switch state
+motion_activation_enabled: true          # Motion activation setting
+brightness_active: 80                    # Active brightness setting
+brightness_inactive: 10                  # Inactive brightness setting
+lights_on: 2                             # Number of lights currently on
+total_lights: 3                          # Total configured lights
+timers:                                  # Active timer details
+  motion:
+    remaining_seconds: 245
+    end_time: "2025-12-02T10:35:30"
+event_log:                               # Human-readable event history
+  - "10:30:45 - Lights turned on by motion"
 ```
 
 ---
@@ -531,7 +525,7 @@ The integration uses a clean, modular architecture:
 
 ### Testing
 
-Comprehensive test coverage with 232 tests covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, ambient light sensor detection with hysteresis, YAML configuration import, and edge cases.
+Comprehensive test coverage covering state machine transitions, configuration flow, light controller behavior, coordinator logic, timer management, ambient light sensor detection with hysteresis, YAML configuration import, and edge cases.
 
 Run tests:
 ```bash
@@ -570,6 +564,17 @@ uv run ruff check .
 # Format code
 uv run ruff format .
 ```
+
+### Simulation
+
+A web-based simulation helps test and debug the state machine without deploying to Home Assistant:
+
+```bash
+uv run motion-sim
+# Open http://localhost:8093
+```
+
+The simulation runs the actual `MotionLightsCoordinator` with mock services, providing 100% behavior fidelity with production. See [simulation/README.md](simulation/README.md) for details.
 
 ---
 
@@ -666,4 +671,4 @@ If this project helps you, please give it a ⭐️!
 
 ---
 
-**Last Updated:** October 26, 2025
+**Last Updated:** December 2, 2025

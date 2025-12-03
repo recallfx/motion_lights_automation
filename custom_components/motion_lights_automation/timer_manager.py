@@ -1,7 +1,7 @@
 """Timer management for motion lights automation.
 
-This module provides flexible timer management that can be easily extended
-with different timer strategies, multiple concurrent timers, etc.
+This module provides Home Assistant-specific timer management with
+HA event loop scheduling.
 """
 
 from __future__ import annotations
@@ -26,8 +26,16 @@ class TimerType(Enum):
     CUSTOM = "custom"
 
 
+# Re-export for backward compatibility
+__all__ = [
+    "Timer",
+    "TimerManager",
+    "TimerType",
+]
+
+
 class Timer:
-    """Represents a single timer instance."""
+    """Home Assistant-specific timer implementation."""
 
     def __init__(
         self,
@@ -52,13 +60,13 @@ class Timer:
         self.hass = hass
         self.name = name or f"timer_{timer_type.value}"
 
-        self._handle: asyncio.TimerHandle | None = None
         self._start_time: datetime | None = None
         self._end_time: datetime | None = None
         self._is_active = False
+        self._handle: asyncio.TimerHandle | None = None
 
     def start(self) -> None:
-        """Start or restart the timer."""
+        """Start or restart the timer using HA event loop."""
         if self._is_active:
             self.cancel()
 
@@ -79,6 +87,20 @@ class Timer:
             lambda: self.hass.async_create_task(self._async_expire()),
         )
 
+    def cancel(self) -> None:
+        """Cancel the timer."""
+        if self._handle:
+            self._handle.cancel()
+            self._handle = None
+
+        if not self._is_active:
+            return
+
+        _LOGGER.debug("Cancelling timer '%s' (%s)", self.name, self.timer_type.value)
+        self._is_active = False
+        self._start_time = None
+        self._end_time = None
+
     async def _async_expire(self) -> None:
         """Handle timer expiration."""
         if not self._is_active:
@@ -87,27 +109,13 @@ class Timer:
 
         _LOGGER.info("Timer '%s' (%s) expired", self.name, self.timer_type.value)
         self._is_active = False
-        self._handle = None
 
         try:
-            await self.callback()
+            result = self.callback(self.name)
+            if asyncio.iscoroutine(result):
+                await result
         except Exception as err:
             _LOGGER.error("Error in timer callback for '%s': %s", self.name, err)
-
-    def cancel(self) -> None:
-        """Cancel the timer."""
-        if not self._is_active:
-            return
-
-        _LOGGER.debug("Cancelling timer '%s' (%s)", self.name, self.timer_type.value)
-
-        if self._handle:
-            self._handle.cancel()
-            self._handle = None
-
-        self._is_active = False
-        self._start_time = None
-        self._end_time = None
 
     def extend(self, additional_seconds: int) -> None:
         """Extend the timer by additional seconds."""
@@ -162,19 +170,10 @@ class Timer:
 
 
 class TimerManager:
-    """Manages multiple timers for motion lights automation.
+    """Home Assistant-specific timer manager.
 
     This class provides a flexible timer management system that can handle
-    multiple concurrent timers, different timer strategies, and easy extension.
-
-    To add a new timer type:
-    1. Add the timer type to TimerType enum
-    2. Create the timer with create_timer() or use add_timer()
-    3. The timer will automatically be tracked and managed
-
-    To implement timer strategies (e.g., progressive timeout, adaptive timers):
-    1. Create a new method that calculates duration based on context
-    2. Use that duration when creating timers
+    multiple concurrent timers.
     """
 
     def __init__(self, hass: HomeAssistant):
@@ -193,7 +192,7 @@ class TimerManager:
         duration: int | None = None,
         name: str | None = None,
     ) -> Timer:
-        """Create a new timer.
+        """Create a new Home Assistant timer.
 
         Args:
             timer_type: Type of timer to create
@@ -208,9 +207,7 @@ class TimerManager:
             duration = self._default_durations.get(timer_type, 300)
 
         timer_name = name or timer_type.value
-        timer = Timer(timer_type, duration, callback, self.hass, timer_name)
-
-        return timer
+        return Timer(timer_type, duration, callback, self.hass, timer_name)
 
     def add_timer(self, name: str, timer: Timer) -> None:
         """Add a timer to be managed.
@@ -228,10 +225,7 @@ class TimerManager:
         callback: Callable,
         duration: int | None = None,
     ) -> Timer:
-        """Create and start a timer in one step.
-
-        This is a convenience method that combines create_timer and add_timer.
-        """
+        """Create and start a timer in one step."""
         timer = self.create_timer(timer_type, callback, duration, name)
         self.add_timer(name, timer)
         timer.start()
@@ -270,11 +264,7 @@ class TimerManager:
         return self._timers.get(name)
 
     def has_active_timer(self, name: str | None = None) -> bool:
-        """Check if a timer is active.
-
-        Args:
-            name: Timer name to check, or None to check if any timer is active
-        """
+        """Check if a timer is active."""
         if name:
             timer = self._timers.get(name)
             return timer.is_active if timer else False
@@ -295,11 +285,7 @@ class TimerManager:
         )
 
     def extend_timer(self, name: str, additional_seconds: int) -> bool:
-        """Extend a timer by additional seconds.
-
-        Returns:
-            True if timer was extended, False if it doesn't exist
-        """
+        """Extend a timer by additional seconds."""
         timer = self._timers.get(name)
         if timer and timer.is_active:
             timer.extend(additional_seconds)

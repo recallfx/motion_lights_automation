@@ -153,61 +153,36 @@ The integration operates through a finite state machine with 7 distinct states. 
 
 ## Brightness System
 
-The integration uses two separate control mechanisms:
-
-### 1. Brightness Level (How Bright?)
-
 The integration determines brightness using a priority system:
 
 **Priority 1: House Active Switch** (if configured)
 - Switch ON → Use `brightness_active` (default 80%)
 - Switch OFF → Use `brightness_inactive` (default 10%)
 
-**Priority 2: Dark Inside Sensor** (if configured and no house_active)
-- Dark inside OFF → Use `brightness_active`
-- Dark inside ON → Use `brightness_inactive`
+**Priority 2: Ambient Light Sensor** (if configured and no house_active)
+- Room bright → Use `brightness_active` (lights may not turn on if brightness is 0)
+- Room dark → Use `brightness_inactive`
 
 **Priority 3: Default** (no switches configured)
 - Always use `brightness_active`
 
-### 2. Light Selection (Which Lights?)
+### Important: Brightness Zero Behavior
 
-The integration also determines which lights to turn on:
-
-**Night Mode - Only Background Lights:**
-- Requires BOTH conditions: `dark_inside` ON **AND** `house_active` OFF
-- Only background lights turn on
-- Perfect for nighttime or windowless rooms that need minimal lighting
-
-**Day Mode - All Configured Lights:**
-- Any other combination of switch states
-- All configured lights (ceiling, background, feature) turn on
-- Normal daytime/active hours operation
-
-**If only `dark_inside` configured:**
-- Dark inside ON → Only background lights
-- Dark inside OFF → All lights
-
-**If only `house_active` configured:**
-- All lights always turn on (no night mode)
+When the brightness strategy returns 0% (e.g., ambient light sensor shows the room is already bright), **the lights will not turn on**. This prevents unnecessary light usage when there's sufficient ambient light.
 
 ### Brightness Calculation Examples
 
-**Scenario 1: Only `dark_inside` configured**
+**Scenario 1: Only `ambient_light_sensor` configured**
 ```yaml
-dark_inside: binary_sensor.room_dark
+ambient_light_sensor: binary_sensor.room_dark
 brightness_active: 90
 brightness_inactive: 15
 ```
-**Brightness:**
-- Room bright → 90% brightness
-- Room dark → 15% brightness
+**Behavior:**
+- Room bright (sensor OFF) → Brightness 0% (lights don't turn on)
+- Room dark (sensor ON) → 15% brightness
 
-**Light Selection:**
-- Room bright → All lights
-- Room dark → Only background lights (night mode)
-
-**Use Case:** Windowless bathroom - sensor detects when room is dark
+**Use Case:** Windowless bathroom - lights only turn on when room is dark
 
 **Scenario 2: Only `house_active` configured**
 ```yaml
@@ -215,35 +190,24 @@ house_active: input_boolean.house_active
 brightness_active: 80
 brightness_inactive: 10
 ```
-**Brightness:**
+**Behavior:**
 - House active ON → 80% brightness
 - House active OFF → 10% brightness
 
-**Light Selection:**
-- All lights always turn on (no night mode without dark_inside)
+**Use Case:** Daytime full brightness, nighttime dim brightness
 
-**Scenario 3: Both configured (best control)**
+**Scenario 3: Both configured (house_active takes priority)**
 ```yaml
 house_active: input_boolean.house_active
-dark_inside: binary_sensor.room_dark
+ambient_light_sensor: binary_sensor.room_dark
 brightness_active: 100
 brightness_inactive: 20
 ```
-**Brightness (house_active takes priority):**
-- House active ON → 100% (even if dark inside)
-- House active OFF → 20% (even if room bright)
+**Behavior (house_active takes priority for brightness):**
+- House active ON → 100% brightness
+- House active OFF → 20% brightness
 
-**Light Selection (requires BOTH for night mode):**
-- Dark inside ON + House active OFF → Only background lights (night mode)
-- Any other combination → All lights
-
-**Truth Table:**
-| dark_inside | house_active | Lights | Brightness |
-|-------------|--------------|--------|------------|
-| OFF | OFF | Background only | 20% (inactive) |
-| OFF | ON | All lights | 100% (active) |
-| ON | OFF | Background only | 20% (inactive) |
-| ON | ON | All lights | 20% (inactive) |
+**Note:** When both are configured, the house_active switch controls brightness. The ambient_light_sensor can still prevent lights from turning on if the room is bright.
 
 **Scenario 4: Neither configured**
 ```yaml
@@ -256,19 +220,16 @@ brightness_inactive: 5
 
 ### Real-World Brightness Use Case
 
-**Problem:** You want full lighting during active hours (7 AM - 10 PM), but only dim background lights at night for bathroom trips. Your bathroom has no windows.
+**Problem:** You want full lighting during active hours (7 AM - 10 PM), but only dim lights at night for bathroom trips.
 
 **Solution:**
 1. Create `input_boolean.house_active` helper
-2. Add ambient light sensor in the bathroom or use time-based helper
-3. Configure integration with:
+2. Configure integration with:
    - `house_active: input_boolean.house_active`
-   - `dark_inside: binary_sensor.bathroom_dark` (or time-based)
-   - `background_lights: light.bathroom_night_light`
-   - `ceiling_lights: light.bathroom_main`
+   - `lights: light.bathroom_main, light.bathroom_night_light`
    - `brightness_active: 80`
    - `brightness_inactive: 5`
-4. Create two automations:
+3. Create two automations:
    ```yaml
    # Morning: Enable house active
    - alias: "House Active - Morning"
@@ -293,14 +254,12 @@ brightness_inactive: 5
 
 **Result:**
 - **7 AM - 10 PM (house active ON):** All lights at 80% when motion detected
-- **10 PM - 7 AM + Dark inside (night mode):** Only background lights at 5%
-- **10 PM - 7 AM but room bright (lights already on):** All lights at 5%
-- **Night bathroom trip:** Soft background light guides the way without waking others
+- **10 PM - 7 AM (house inactive):** All lights at 5% when motion detected
 
-**Why `dark_inside` is better than sun sensor:**
+**Why `ambient_light_sensor` is useful:**
 - Works for windowless rooms (bathrooms, closets, hallways)
-- Can use ambient light sensor to detect actual room darkness
-- More accurate for interior spaces
+- Can use lux sensor to detect actual room brightness
+- Prevents lights from turning on when there's sufficient ambient light
 
 ---
 
@@ -360,10 +319,6 @@ The integration uses two types of timers with different purposes.
 |-------|----------|-------------|---------|----------|
 | Motion | 300s default | Motion stops | Wait before auto-off | New motion |
 | Extended | 1200s default | Manual intervention | Respect manual control | Not reset |
-
-### Light Selection
-
-By default, the integration uses **all configured lights** during active mode and **only background lights** during inactive mode. This can be customized through the strategy pattern (see Advanced Customization section).
 
 ---
 
@@ -427,60 +382,66 @@ Every integration instance creates a sensor entity for monitoring and diagnostic
 
 ### State Values
 
-The sensor's state reflects the current state machine state:
+The sensor's state shows the last human-readable event message (e.g., "Lights turned on by motion", "Lights turned off (timeout)"). The `current_state` attribute reflects the state machine state:
 
 | State Value | Meaning | Typical Duration |
 |-------------|---------|------------------|
 | `idle` | No automation active, lights off | Until motion detected |
-| `motion_auto` | Motion active, lights on by automation | While motion continues |
+| `motion-auto` | Motion active, lights on by automation | While motion continues |
 | `auto` | Motion ended, motion timer counting down | 5 minutes (default) |
-| `motion_manual` | Motion active, manual control detected | While motion continues |
+| `motion-manual` | Motion active, manual control detected | While motion continues |
 | `manual` | Manual control, extended timer counting | 20 minutes (default) |
-| `manual_off` | User turned off lights, blocking auto-on | 20 minutes (default) |
+| `manual-off` | User turned off lights, blocking auto-on | 20 minutes (default) |
 | `overridden` | Override switch active, automation disabled | While override ON |
 
 ### Sensor Attributes
 
 Complete list of available attributes:
 
-#### Core Status
+#### Current State & Conditions
 ```yaml
 current_state: "auto"                    # Current state machine state
-timer_active: true                       # Is any timer currently running?
-time_until_action: 245                   # Seconds until next automatic action
-next_action_time: "2025-10-23T15:30:45"  # ISO timestamp of next action
-motion_detected: false                   # Current motion sensor state
-override_active: false                   # Current override switch state
+motion_active: false                     # Current motion sensor state
+is_dark_inside: true                     # Current ambient light condition
+is_house_active: false                   # Current house_active switch state
+motion_activation_enabled: true          # Is motion activation enabled?
+```
+
+#### State Transitions
+```yaml
+last_transition_reason: "motion_off"     # Event that triggered last transition
+last_transition_time: "2025-12-02T10:30:45.123456"  # When last transition occurred
+```
+
+#### Timer Information
+```yaml
+timers:                                  # Active timer details
+  motion:
+    remaining_seconds: 245               # Seconds until timer expires
+    end_time: "2025-12-02T10:35:30"      # When timer will expire
+```
+
+#### Light Status
+```yaml
+lights_on: 2                             # Number of lights currently on
+total_lights: 3                          # Total configured lights
 ```
 
 #### Configuration Values
 ```yaml
-motion_activation_enabled: true          # Is motion activation enabled?
 brightness_active: 80                    # Configured active brightness
 brightness_inactive: 10                  # Configured inactive brightness
-house_active: true                       # Current house_active switch state
-dark_inside: false                       # Current dark_inside sensor state
-only_background_lights: false            # Will only background lights turn on?
-use_dim_brightness: false                # Will dim brightness be used?
-no_motion_wait: 300                      # Motion timer duration (seconds)
-extended_timeout: 1200                   # Extended timer duration (seconds)
 ```
 
-#### Entity Assignments
+#### Event History
 ```yaml
-motion_entity: "binary_sensor.kitchen_motion"
-ceiling_light: "light.kitchen_ceiling"
-background_light: "light.kitchen_under_cabinet"
-feature_light: null                      # null if not configured
-override_switch: "input_boolean.kitchen_override"
-house_active_switch: "input_boolean.house_active"
-dark_inside_sensor: "binary_sensor.kitchen_dark"
-```
-
-#### Debugging Info
-```yaml
-manual_reason: "Brightness changed significantly"  # Why manual state was entered
-last_motion_time: "2025-10-23T15:25:30"           # Last motion detection
+recent_events:                           # Detailed event log for debugging
+  - timestamp: "2025-12-02T10:30:45"
+    type: "motion_on"
+    motion_activation: true
+event_log:                               # Human-readable event log
+  - "10:30:45 - Lights turned on by motion"
+  - "10:32:00 - Lights adjusted manually"
 ```
 
 ### Using the Sensor in Automations
@@ -492,6 +453,7 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.kitchen_lighting_automation
+        attribute: current_state
         to: "manual"
         for:
           minutes: 30
@@ -501,7 +463,7 @@ automation:
           message: "Kitchen lights have been in manual mode for 30 minutes"
 ```
 
-**Example 2: Dashboard card showing timer countdown**
+**Example 2: Dashboard card showing status**
 ```yaml
 type: entities
 entities:
@@ -509,17 +471,16 @@ entities:
     name: Kitchen Automation
   - type: attribute
     entity: sensor.kitchen_lighting_automation
-    attribute: time_until_action
-    name: Time Until Action
-    suffix: " seconds"
+    attribute: current_state
+    name: Current State
   - type: attribute
     entity: sensor.kitchen_lighting_automation
-    attribute: only_background_lights
-    name: Night Mode
+    attribute: motion_active
+    name: Motion Active
   - type: attribute
     entity: sensor.kitchen_lighting_automation
-    attribute: use_dim_brightness
-    name: Dim Brightness
+    attribute: lights_on
+    name: Lights On
 ```
 
 **Example 3: Trigger when entering AUTO state**
@@ -529,6 +490,7 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.kitchen_lighting_automation
+        attribute: current_state
         to: "auto"
     action:
       - service: tts.speak
@@ -546,7 +508,7 @@ automation:
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.bedroom_motion`
-- Ceiling Lights: `light.bedroom_ceiling`
+- Lights: `light.bedroom_ceiling`
 - No Motion Wait: `300` (5 minutes)
 - Brightness Active: `80`
 - Brightness Inactive: `20`
@@ -562,27 +524,24 @@ automation:
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.kitchen_motion`
-- Ceiling Lights: `light.kitchen_ceiling`
-- Background Lights: `light.kitchen_under_cabinet`
-- Dark Inside: `binary_sensor.sun_below_horizon`
+- Lights: `light.kitchen_ceiling`, `light.kitchen_under_cabinet`
+- Ambient Light Sensor: `binary_sensor.sun_below_horizon`
 - No Motion Wait: `300`
 - Brightness Active: `100` (day mode)
 - Brightness Inactive: `10` (night mode)
 
 **Behavior:**
 - During day (sun above horizon): All lights at 100%
-- At night (sun below horizon): Only background lights at 10%
+- At night (sun below horizon): All lights at 10%
 - Manual adjustment → System backs off
 
 ### Example 3: Living Room with House Active Mode
 
-**Goal:** Bright lights when house is active, dim lights when winding down for bed, multiple light types.
+**Goal:** Bright lights when house is active, dim lights when winding down for bed.
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.living_room_motion`
-- Ceiling Lights: `light.living_room_main`
-- Background Lights: `light.living_room_lamp_1`, `light.living_room_lamp_2`
-- Feature Lights: `light.living_room_accent`
+- Lights: `light.living_room_main`, `light.living_room_lamp_1`, `light.living_room_lamp_2`, `light.living_room_accent`
 - House Active: `input_boolean.house_active`
 - No Motion Wait: `600` (10 minutes)
 - Extended Timeout: `1800` (30 minutes)
@@ -624,7 +583,7 @@ automation:
 
 **Configuration:**
 - Motion Sensors: `binary_sensor.bathroom_motion`
-- Ceiling Lights: `light.bathroom_ceiling`
+- Lights: `light.bathroom_ceiling`
 - Override Switch: `input_boolean.bathroom_override`
 - No Motion Wait: `180` (3 minutes)
 - Brightness Active: `100`
@@ -655,7 +614,7 @@ The integration fires events to the Home Assistant event bus for real-time debug
 - `motion_lights_automation_timer_expired` - Timer events
 - `motion_lights_automation_override_activated/deactivated` - Override changes
 
-📖 **See [EVENTS.md](EVENTS.md) for complete event reference and examples**
+Events are logged to the sensor's `recent_events` and `event_log` attributes for debugging.
 
 ### Lights Don't Turn On with Motion
 
@@ -690,10 +649,10 @@ The integration fires events to the Home Assistant event bus for real-time debug
 
 **Check:**
 1. House active switch is configured and changing states
-2. Or dark inside sensor is configured and changing states
+2. Or ambient light sensor is configured and changing states
 3. Verify sensor states in `Developer Tools` → `States`
 
-**Debug:** Check sensor attributes for `house_active`, `dark_inside`, `use_dim_brightness`, and `only_background_lights`
+**Debug:** Check sensor attributes for `is_house_active` and `is_dark_inside`
 
 ### Lights Flicker or Behave Erratically
 
@@ -919,9 +878,9 @@ If you're upgrading from a version that used `brightness_day` and `brightness_ni
    - Review your brightness levels (defaults changed: active 80%, inactive 10%)
 
 3. **Behavior Changes:**
-   - If you had only `dark_inside` configured: **No change in behavior**
+   - If you had only `ambient_light_sensor` (or old `dark_inside`) configured: **No change in behavior**
    - Default brightness is now "active" (bright) instead of "day"
-   - New priority system: house_active > dark_inside > default
+   - New priority system: house_active > ambient_light_sensor > default
 
 **Example:**
 
@@ -936,15 +895,14 @@ dark_inside: binary_sensor.sun_below_horizon
 ```
 brightness_active: 50
 brightness_inactive: 5
-dark_inside: binary_sensor.sun_below_horizon
-house_active: (not set - uses dark_inside)
+ambient_light_sensor: binary_sensor.sun_below_horizon
 ```
 
 **Enhanced Configuration:**
 ```
 brightness_active: 80
 brightness_inactive: 10
-dark_inside: binary_sensor.sun_below_horizon
+ambient_light_sensor: binary_sensor.sun_below_horizon
 house_active: input_boolean.house_active
 ```
 
@@ -960,9 +918,6 @@ house_active: input_boolean.house_active
 
 ### Q: Can I use this with groups?
 **A:** Yes, but it's recommended to select individual lights for better control. If using groups, select the group entity.
-
-### Q: What's the difference between ceiling, background, and feature lights?
-**A:** Currently, all are treated the same (all turn on together). The separation allows for future enhancements where different light types could behave differently (e.g., only background lights at night).
 
 ### Q: Does this work with Zigbee/Z-Wave/WiFi lights?
 **A:** Yes! It works with any light entity in Home Assistant, regardless of protocol.
@@ -993,9 +948,9 @@ The integration uses a modular architecture with clear separation of concerns:
 - **Coordinator** (`motion_coordinator.py`) - Orchestrates all components
 - **State Machine** (`state_machine.py`) - Manages state transitions
 - **Timer Manager** (`timer_manager.py`) - Handles motion and extended timers
-- **Trigger Manager** (`trigger_manager.py`) - Manages event triggers (motion, override)
+- **Triggers** (`triggers.py`) - Manages event triggers (motion, override)
 - **Light Controller** (`light_controller.py`) - Controls lights with strategies
-- **Manual Detector** (`manual_detector.py`) - Detects manual interventions
+- **Manual Detection** (`manual_detection.py`) - Detects manual interventions
 - **Config Flow** (`config_flow.py`) - UI configuration
 - **Sensor** (`sensor.py`) - Status sensor entity
 
@@ -1009,11 +964,13 @@ The integration uses a modular architecture with clear separation of concerns:
 ### Testing
 
 The integration has comprehensive test coverage:
-- **213 tests** covering all critical paths
-- State machine transitions: 60+ tests
-- Configuration flow: 45+ tests
-- Light controller: 35+ tests
-- Coordinator: 40+ tests
+- State machine transitions
+- Configuration flow
+- Light controller behavior
+- Coordinator logic
+- Timer management
+- Ambient light sensor detection
+- YAML configuration import
 - Edge cases and error handling
 
 ### Module Documentation
@@ -1021,7 +978,7 @@ The integration has comprehensive test coverage:
 For developers and advanced users who want to extend the integration, see:
 - **[Architecture Guide](ARCHITECTURE.md)** - System architecture and extension points
 - **Module Docstrings** - Each Python file has comprehensive inline documentation
-- **[Test Suite](../../tests/)** - 213+ tests showing usage examples and edge cases
+- **[Test Suite](../../tests/)** - Tests showing usage examples and edge cases
 
 ---
 
@@ -1091,4 +1048,4 @@ logger:
 
 ---
 
-**Last Updated:** October 23, 2025
+**Last Updated:** December 2, 2025

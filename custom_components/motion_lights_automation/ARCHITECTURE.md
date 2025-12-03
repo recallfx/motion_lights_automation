@@ -180,7 +180,7 @@ class TriggerManager:
 ## Testing
 
 ```bash
-# Run full test suite (213+ tests)
+# Run full test suite
 pytest tests/
 
 # Run specific module tests
@@ -191,11 +191,14 @@ pytest tests/motion_lights_automation/test_light_controller.py
 pytest --cov=custom_components/motion_lights_automation tests/
 ```
 
-**Test Coverage:** 213+ tests across all components
-- State machine: 60+ tests
-- Configuration flow: 45+ tests
-- Light controller: 35+ tests
-- Coordinator: 40+ tests
+**Test Coverage:** Comprehensive tests across all components
+- State machine transitions
+- Configuration flow
+- Light controller behavior
+- Coordinator logic
+- Timer management
+- Ambient light sensor detection
+- YAML configuration import
 - Edge cases and error handling
 
 ## Best Practices

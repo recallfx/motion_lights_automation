@@ -1,7 +1,7 @@
 """State machine for motion lights automation.
 
-This module provides a clean state machine implementation that can be easily
-extended with new states and transitions.
+This module provides the state machine implementation with Home Assistant
+time utilities.
 """
 
 from __future__ import annotations
@@ -14,17 +14,31 @@ from typing import Any, Callable
 
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    STATE_AUTO,
-    STATE_IDLE,
-    STATE_MANUAL,
-    STATE_MANUAL_OFF,
-    STATE_MOTION_AUTO,
-    STATE_MOTION_MANUAL,
-    STATE_OVERRIDDEN,
-)
-
 _LOGGER = logging.getLogger(__name__)
+
+# State constants - named for clarity about what they represent
+# STANDBY: Ready and waiting, lights off
+# MOTION_DETECTED: Motion active, lights auto-controlled
+# AUTO_TIMEOUT: No motion, auto-controlled lights timing out
+# MOTION_ADJUSTED: Motion active, user has adjusted lights
+# MANUAL_TIMEOUT: User-controlled lights timing out
+# MANUAL_OFF: User turned off lights, blocking auto-on until timeout
+# DISABLED: Override switch active, automation disabled
+STATE_DISABLED = "disabled"
+STATE_STANDBY = "standby"
+STATE_MOTION_DETECTED = "motion-detected"
+STATE_MOTION_ADJUSTED = "motion-adjusted"
+STATE_AUTO_TIMEOUT = "auto-timeout"
+STATE_MANUAL_TIMEOUT = "manual-timeout"
+STATE_MANUAL_OFF = "manual-off"
+
+# Legacy aliases for backward compatibility during migration
+STATE_OVERRIDDEN = STATE_DISABLED
+STATE_IDLE = STATE_STANDBY
+STATE_MOTION_AUTO = STATE_MOTION_DETECTED
+STATE_MOTION_MANUAL = STATE_MOTION_ADJUSTED
+STATE_AUTO = STATE_AUTO_TIMEOUT
+STATE_MANUAL = STATE_MANUAL_TIMEOUT
 
 
 class StateTransitionEvent(Enum):
@@ -51,25 +65,42 @@ class StateTransition:
     action: Callable[[], None] | None = None
 
 
+# Re-export for backward compatibility with existing imports
+__all__ = [
+    "StateTransitionEvent",
+    "StateTransition",
+    "MotionLightsStateMachine",
+    # New names (preferred)
+    "STATE_STANDBY",
+    "STATE_MOTION_DETECTED",
+    "STATE_AUTO_TIMEOUT",
+    "STATE_MOTION_ADJUSTED",
+    "STATE_MANUAL_TIMEOUT",
+    "STATE_MANUAL_OFF",
+    "STATE_DISABLED",
+    # Legacy aliases (deprecated)
+    "STATE_AUTO",
+    "STATE_IDLE",
+    "STATE_MANUAL",
+    "STATE_MOTION_AUTO",
+    "STATE_MOTION_MANUAL",
+    "STATE_OVERRIDDEN",
+]
+
+
 class MotionLightsStateMachine:
     """State machine for motion lights automation.
 
     This class handles state transitions and maintains the current state.
     It's designed to be easily extended with new states and transitions.
-
-    To add a new state:
-    1. Add the state constant to const.py
-    2. Define valid transitions in _define_transitions()
-    3. Optionally add state-specific behavior methods
-
-    To add a new event:
-    1. Add the event to StateTransitionEvent enum
-    2. Define transitions for that event
-    3. Call transition() with the new event
     """
 
     def __init__(self, initial_state: str = STATE_IDLE):
-        """Initialize the state machine."""
+        """Initialize the state machine.
+
+        Args:
+            initial_state: The initial state of the machine
+        """
         self._current_state = initial_state
         self._previous_state: str | None = None
         self._state_entered_at: datetime = dt_util.now()
@@ -133,10 +164,9 @@ class MotionLightsStateMachine:
         )
         self._add_transition(
             STATE_OVERRIDDEN, StateTransitionEvent.OVERRIDE_ON, STATE_OVERRIDDEN
-        )  # Allow re-trigger
+        )
 
         # Override OFF can go to MANUAL or IDLE depending on lights
-        # (handled with conditions in the coordinator)
         self._add_transition(
             STATE_OVERRIDDEN, StateTransitionEvent.OVERRIDE_OFF, STATE_MANUAL
         )
@@ -158,14 +188,19 @@ class MotionLightsStateMachine:
         )
         self._add_transition(
             STATE_MANUAL_OFF, StateTransitionEvent.MANUAL_INTERVENTION, STATE_MANUAL
-        )  # User turns lights back on
+        )
 
-        # Manual OFF intervention (lights turned off during AUTO or MANUAL)
+        # Manual OFF intervention
         self._add_transition(
             STATE_AUTO, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF
         )
         self._add_transition(
             STATE_MANUAL, StateTransitionEvent.MANUAL_OFF_INTERVENTION, STATE_MANUAL_OFF
+        )
+        self._add_transition(
+            STATE_MOTION_AUTO,
+            StateTransitionEvent.MANUAL_OFF_INTERVENTION,
+            STATE_MANUAL_OFF,
         )
         self._add_transition(
             STATE_MOTION_MANUAL,
@@ -182,11 +217,13 @@ class MotionLightsStateMachine:
             STATE_MANUAL_OFF, StateTransitionEvent.TIMER_EXPIRED, STATE_IDLE
         )
 
-        # All lights off transitions (for unexpected cases, not manual intervention)
+        # All lights off transitions
         self._add_transition(
             STATE_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
         )
-        # MANUAL state handles LIGHTS_ALL_OFF via MANUAL_OFF_INTERVENTION instead
+        self._add_transition(
+            STATE_MANUAL, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
+        )
         self._add_transition(
             STATE_MOTION_AUTO, StateTransitionEvent.LIGHTS_ALL_OFF, STATE_IDLE
         )

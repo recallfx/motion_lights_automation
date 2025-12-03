@@ -1,5 +1,13 @@
 # Motion Lights Automation - AI Agent Instructions
 
+## Skill files
+
+Detailed development guides are available in `.github/skills/`:
+
+- **`ha-component.md`** - Home Assistant component development (state machine, timers, triggers, config flow)
+- **`simulation.md`** - Simulation server and industrial dashboard UI (WebSocket API, Lit components, styling)
+- **`testing.md`** - Testing patterns, fixtures, mocks, and common pitfalls
+
 ## Architecture overview
 
 This Home Assistant integration uses a modular coordinator pattern with five independent components. The coordinator (`motion_coordinator.py`) wires components together but delegates all logic to specialized modules:

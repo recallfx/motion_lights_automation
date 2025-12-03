@@ -144,19 +144,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Forward setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
 
-    # Register refresh service
-    async def handle_refresh_tracking(call: ServiceCall) -> None:
-        """Handle refresh tracking service call."""
-        config_entry_id = call.data["config_entry_id"]
-        if config_entry_id == entry.entry_id:
-            await motion_coordinator.async_refresh_light_tracking()
+    # Register refresh service (once per domain, not per entry)
+    if not hass.services.has_service(DOMAIN, SERVICE_REFRESH_TRACKING):
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REFRESH_TRACKING,
-        handle_refresh_tracking,
-        schema=SERVICE_REFRESH_SCHEMA,
-    )
+        async def handle_refresh_tracking(call: ServiceCall) -> None:
+            """Handle refresh tracking service call."""
+            config_entry_id = call.data["config_entry_id"]
+            # Find the coordinator for the specified entry
+            for config_entry in hass.config_entries.async_entries(DOMAIN):
+                if (
+                    config_entry.entry_id == config_entry_id
+                    and hasattr(config_entry, "runtime_data")
+                    and config_entry.runtime_data
+                ):
+                    await config_entry.runtime_data.async_refresh_light_tracking()
+                    return
+            _LOGGER.warning(
+                "No coordinator found for config_entry_id: %s", config_entry_id
+            )
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_REFRESH_TRACKING,
+            handle_refresh_tracking,
+            schema=SERVICE_REFRESH_SCHEMA,
+        )
 
     return True
 
