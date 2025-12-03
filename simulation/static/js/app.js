@@ -8,7 +8,6 @@ import { store } from './state-store.js';
 // Import all components
 import './app-header.js';
 import './flow-component.js';
-import './state-machine.js';
 import './state-flow.js';
 import './timer-display.js';
 import './event-log.js';
