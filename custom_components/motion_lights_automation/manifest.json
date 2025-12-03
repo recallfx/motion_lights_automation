@@ -1,12 +1,10 @@
 {
   "domain": "motion_lights_automation",
   "name": "Motion Lights Automation",
-  "codeowners": [
-    "@recallfx"
-  ],
+  "after_dependencies": ["light"],
+  "codeowners": ["@recallfx"],
   "config_flow": true,
   "dependencies": [],
-  "after_dependencies": ["light"],
   "documentation": "https://github.com/recallfx/motion_lights_automation",
   "integration_type": "service",
   "iot_class": "calculated",
