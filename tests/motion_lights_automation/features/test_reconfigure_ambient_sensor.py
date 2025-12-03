@@ -89,9 +89,9 @@ async def test_reconfigure_remove_ambient_sensor(
         # The ambient sensor should be removed or None
         if CONF_AMBIENT_LIGHT_SENSOR in entry.data:
             # If present, it should be None
-            assert (
-                entry.data[CONF_AMBIENT_LIGHT_SENSOR] is None
-            ), f"Expected None but got {entry.data[CONF_AMBIENT_LIGHT_SENSOR]}"
+            assert entry.data[CONF_AMBIENT_LIGHT_SENSOR] is None, (
+                f"Expected None but got {entry.data[CONF_AMBIENT_LIGHT_SENSOR]}"
+            )
         # Otherwise it's not in the dict at all, which is also fine
 
 
@@ -250,6 +250,6 @@ async def test_reconfigure_remove_all_optional_entities(
             CONF_HOUSE_ACTIVE,
         ]:
             if field in entry.data:
-                assert (
-                    entry.data[field] is None
-                ), f"Expected {field} to be None but got {entry.data[field]}"
+                assert entry.data[field] is None, (
+                    f"Expected {field} to be None but got {entry.data[field]}"
+                )
