@@ -12,7 +12,7 @@ Detailed development guides are available in `.github/skills/`:
 
 This Home Assistant integration uses a modular coordinator pattern with five independent components. The coordinator (`motion_coordinator.py`) wires components together but delegates all logic to specialized modules:
 
-- `state_machine.py` - manages transitions between 7 states (IDLE, MOTION_AUTO, AUTO, MANUAL, MOTION_MANUAL, MANUAL_OFF, OVERRIDDEN)
+- `state_machine.py` - manages transitions between 7 states (STANDBY, MOTION_DETECTED, AUTO_TIMEOUT, MANUAL_TIMEOUT, MOTION_ADJUSTED, MANUAL_OFF, DISABLED)
 - `timer_manager.py` - handles motion timers (short) and extended timers (long) with lifecycle management
 - `light_controller.py` - controls lights using pluggable brightness and selection strategies
 - `triggers.py` - event handlers for motion sensors and override switches, extensible via TriggerHandler base class
@@ -70,7 +70,7 @@ Tests mirror the source structure: `tests/motion_lights_automation/test_*.py` co
 
 The `motion_lights_automation_rig` is a test helper integration that provides mock entities. Don't modify it unless adding new entity types for testing.
 
-Constants go in `const.py` using uppercase names. State strings use lowercase with hyphens (STATE_MOTION_AUTO = "motion-auto").
+Constants go in `const.py` using uppercase names. State strings use lowercase with hyphens (STATE_MOTION_DETECTED = "motion-detected"). Legacy aliases exist for backward compatibility (e.g., STATE_IDLE = STATE_STANDBY).
 
 ## Readme writing style
 

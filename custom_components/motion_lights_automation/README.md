@@ -51,7 +51,7 @@ Fine-tune the behavior with advanced options:
 |---------|---------|-------|-------------|
 | **Motion Activation** | Enabled | On/Off | Enable/disable motion detection |
 | **No Motion Wait** | 300s | 0-3600s | Seconds to wait after motion stops before turning off |
-| **Extended Timeout** | 1200s | 0-7200s | Additional time for manual/auto modes before returning to idle |
+| **Extended Timeout** | 1200s | 0-7200s | Additional time for manual modes before returning to standby |
 | **Brightness Active** | 80% | 0-100% | Brightness when house is active |
 | **Brightness Inactive** | 10% | 0-100% | Brightness when house is inactive |
 
@@ -67,34 +67,34 @@ The integration operates through a finite state machine with 7 distinct states. 
 
 ```
 ┌─────────┐
-│  IDLE   │ ← Lights off, no motion
+│ STANDBY │ ← Lights off, ready for motion
 └────┬────┘
      │ motion detected
      ↓
-┌──────────────┐
-│ MOTION_AUTO  │ ← Lights turned on automatically
-└──┬────┬──────┘
-   │    │ motion timer expires (no motion for N seconds)
+┌──────────────────┐
+│ MOTION_DETECTED  │ ← Lights turned on automatically
+└──┬────┬──────────┘
+   │    │ motion stops (no motion for N seconds)
    │    ↓
-   │  ┌──────┐
-   │  │ AUTO │ ← Automatic mode, motion timer active (waiting for more motion)
-   │  └──┬───┘
+   │  ┌──────────────┐
+   │  │ AUTO_TIMEOUT │ ← Countdown to lights off (waiting for more motion)
+   │  └──┬───────────┘
    │     │ motion timer expires (no further motion) OR all lights manually off
    │     ↓
-   │  ┌─────┐
-   │  │IDLE │
-   │  └─────┘
+   │  ┌─────────┐
+   │  │ STANDBY │
+   │  └─────────┘
    │
    │ manual intervention detected
    ↓
-┌───────────────┐
-│ MOTION_MANUAL │ ← Manual control detected during motion
-└───────┬───────┘
-        │ motion timer expires
+┌──────────────────┐
+│ MOTION_ADJUSTED  │ ← Manual control detected during motion
+└───────┬──────────┘
+        │ motion stops
         ↓
-   ┌────────┐
-   │ MANUAL │ ← Manual mode, extended timer active
-   └───┬────┘
+   ┌────────────────┐
+   │ MANUAL_TIMEOUT │ ← Manual mode, extended timer active
+   └───┬────────────┘
        │ extended timer expires OR all lights manually off
        ↓
    ┌─────────────┐
@@ -102,52 +102,52 @@ The integration operates through a finite state machine with 7 distinct states. 
    └──────┬──────┘
           │ motion detected (if activation enabled)
           ↓
-        ┌──────────────┐
-        │ MOTION_AUTO  │
-        └──────────────┘
+        ┌──────────────────┐
+        │ MOTION_DETECTED  │
+        └──────────────────┘
 
-┌─────────────┐
-│ OVERRIDDEN  │ ← Override switch is ON (automation disabled)
-└─────────────┘
+┌──────────┐
+│ DISABLED │ ← Override switch is ON (automation disabled)
+└──────────┘
 ```
 
 ### State Transition Rules
 
 | Current State | Trigger | Next State | Action |
 |---------------|---------|------------|--------|
-| IDLE | Motion detected + activation enabled | MOTION_AUTO | Turn on lights at calculated brightness |
-| IDLE | Override switch ON | OVERRIDDEN | Do nothing |
-| MOTION_AUTO | Motion stops | AUTO | Start motion timer |
-| MOTION_AUTO | Manual intervention | MOTION_MANUAL | Respect manual settings |
-| MOTION_AUTO | Override switch ON | OVERRIDDEN | Cancel all timers |
-| AUTO | Motion timer expires | IDLE | Turn off lights |
-| AUTO | Motion detected again | MOTION_AUTO | Cancel timer, keep lights on |
-| AUTO | Manual intervention | MANUAL | Switch to extended timer |
-| AUTO | All lights manually turned off | MANUAL_OFF | Switch to extended timer, block auto-on |
-| MANUAL | Extended timer expires | IDLE | Turn off lights |
-| MANUAL | All lights manually turned off | MANUAL_OFF | Block auto-on until timer expires |
-| MANUAL_OFF | Extended timer expires | IDLE | Re-enable automation |
-| MOTION_MANUAL | Motion stops | MANUAL | Start extended timer |
-| OVERRIDDEN | Override switch OFF | Evaluate current state | Transition to appropriate state |
-| ANY | Override switch ON | OVERRIDDEN | Cancel all timers, disable automation |
+| STANDBY | Motion detected + activation enabled | MOTION_DETECTED | Turn on lights at calculated brightness |
+| STANDBY | Override switch ON | DISABLED | Do nothing |
+| MOTION_DETECTED | Motion stops | AUTO_TIMEOUT | Start motion timer |
+| MOTION_DETECTED | Manual intervention | MOTION_ADJUSTED | Respect manual settings |
+| MOTION_DETECTED | Override switch ON | DISABLED | Cancel all timers |
+| AUTO_TIMEOUT | Motion timer expires | STANDBY | Turn off lights |
+| AUTO_TIMEOUT | Motion detected again | MOTION_DETECTED | Cancel timer, keep lights on |
+| AUTO_TIMEOUT | Manual intervention | MANUAL_TIMEOUT | Switch to extended timer |
+| AUTO_TIMEOUT | All lights manually turned off | MANUAL_OFF | Switch to extended timer, block auto-on |
+| MANUAL_TIMEOUT | Extended timer expires | STANDBY | Turn off lights |
+| MANUAL_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until timer expires |
+| MANUAL_OFF | Extended timer expires | STANDBY | Re-enable automation |
+| MOTION_ADJUSTED | Motion stops | MANUAL_TIMEOUT | Start extended timer |
+| DISABLED | Override switch OFF | Evaluate current state | Transition to appropriate state |
+| ANY | Override switch ON | DISABLED | Cancel all timers, disable automation |
 
 ### When Lights Actually Turn On/Off
 
 **Lights Turn ON:**
-- State: IDLE → MOTION_AUTO (motion detected, activation enabled)
+- State: STANDBY → MOTION_DETECTED (motion detected, activation enabled)
 - Brightness: Calculated using priority system (see Brightness System section)
 - Lights: All configured lights or strategy-selected subset
 
 **Lights Turn OFF:**
-- State: AUTO → IDLE (motion timer expired)
-- State: MANUAL → IDLE (extended timer expired)
+- State: AUTO_TIMEOUT → STANDBY (motion timer expired)
+- State: MANUAL_TIMEOUT → STANDBY (extended timer expired)
 - All lights turn off together
 
 **Lights Stay As-Is:**
-- MOTION_MANUAL: Respects your manual settings
-- MANUAL: Respects your manual settings
+- MOTION_ADJUSTED: Respects your manual settings
+- MANUAL_TIMEOUT: Respects your manual settings
 - MANUAL_OFF: Keeps lights off until timer expires
-- OVERRIDDEN: No automation control
+- DISABLED: No automation control
 
 ---
 
@@ -274,20 +274,20 @@ The integration uses two types of timers with different purposes.
 **Default Duration:** 300 seconds (5 minutes)
 
 **When It Starts:**
-- State transition: MOTION_AUTO → AUTO (motion stops)
+- State transition: MOTION_DETECTED → AUTO_TIMEOUT (motion stops)
 
 **What It Does:**
 - Gives you time to move around without lights turning off
-- Resets if motion detected again (AUTO → MOTION_AUTO)
-- If expires: Turn off lights and transition to IDLE
+- Resets if motion detected again (AUTO_TIMEOUT → MOTION_DETECTED)
+- If expires: Turn off lights and transition to STANDBY
 
 **Configuration:** Set via "No Motion Wait" in advanced settings (0-3600 seconds)
 
 **Example:** You set "No Motion Wait" to 180 seconds (3 minutes)
-1. Motion detected at 10:00:00 → Lights turn on (MOTION_AUTO)
-2. Motion stops at 10:02:00 → Timer starts (AUTO state)
-3. If no more motion by 10:05:00 → Lights turn off (IDLE state)
-4. But if motion detected at 10:04:00 → Timer canceled, back to MOTION_AUTO
+1. Motion detected at 10:00:00 → Lights turn on (MOTION_DETECTED)
+2. Motion stops at 10:02:00 → Timer starts (AUTO_TIMEOUT state)
+3. If no more motion by 10:05:00 → Lights turn off (STANDBY state)
+4. But if motion detected at 10:04:00 → Timer canceled, back to MOTION_DETECTED
 
 ### Extended Timer
 
@@ -296,22 +296,22 @@ The integration uses two types of timers with different purposes.
 **Default Duration:** 1200 seconds (20 minutes)
 
 **When It Starts:**
-- Manual intervention detected during AUTO → MANUAL
-- User turns off lights during AUTO → MANUAL_OFF
-- Motion stops during MOTION_MANUAL → MANUAL
+- Manual intervention detected during AUTO_TIMEOUT → MANUAL_TIMEOUT
+- User turns off lights during AUTO_TIMEOUT → MANUAL_OFF
+- Motion stops during MOTION_ADJUSTED → MANUAL_TIMEOUT
 
 **What It Does:**
 - Respects that you took manual control
 - Gives you extended time before automation resumes
-- If expires: Turn off lights (if still on) and return to IDLE
+- If expires: Turn off lights (if still on) and return to STANDBY
 
 **Configuration:** Set via "Extended Timeout" in advanced settings (0-7200 seconds)
 
 **Example:** You manually dim lights, extended timeout is 1200 seconds (20 minutes)
-1. Lights auto-on at 100% (MOTION_AUTO)
-2. You manually dim to 30% → Extended timer starts (MANUAL)
+1. Lights auto-on at 100% (MOTION_DETECTED)
+2. You manually dim to 30% → Extended timer starts (MANUAL_TIMEOUT)
 3. Motion stops → Timer continues running
-4. After 20 minutes of no interaction → Lights turn off (IDLE)
+4. After 20 minutes of no interaction → Lights turn off (STANDBY)
 
 ### Timer Behavior Comparison
 
@@ -386,13 +386,13 @@ The sensor's state shows the last human-readable event message (e.g., "Lights tu
 
 | State Value | Meaning | Typical Duration |
 |-------------|---------|------------------|
-| `idle` | No automation active, lights off | Until motion detected |
-| `motion-auto` | Motion active, lights on by automation | While motion continues |
-| `auto` | Motion ended, motion timer counting down | 5 minutes (default) |
-| `motion-manual` | Motion active, manual control detected | While motion continues |
-| `manual` | Manual control, extended timer counting | 20 minutes (default) |
+| `standby` | No automation active, lights off | Until motion detected |
+| `motion-detected` | Motion active, lights on by automation | While motion continues |
+| `auto-timeout` | Motion ended, motion timer counting down | 5 minutes (default) |
+| `motion-adjusted` | Motion active, manual control detected | While motion continues |
+| `manual-timeout` | Manual control, extended timer counting | 20 minutes (default) |
 | `manual-off` | User turned off lights, blocking auto-on | 20 minutes (default) |
-| `overridden` | Override switch active, automation disabled | While override ON |
+| `disabled` | Override switch active, automation disabled | While override ON |
 
 ### Sensor Attributes
 
@@ -400,7 +400,7 @@ Complete list of available attributes:
 
 #### Current State & Conditions
 ```yaml
-current_state: "auto"                    # Current state machine state
+current_state: "auto-timeout"                    # Current state machine state
 motion_active: false                     # Current motion sensor state
 is_dark_inside: true                     # Current ambient light condition
 is_house_active: false                   # Current house_active switch state
@@ -454,7 +454,7 @@ automation:
       - platform: state
         entity_id: sensor.kitchen_lighting_automation
         attribute: current_state
-        to: "manual"
+        to: "manual-timeout"
         for:
           minutes: 30
     action:
@@ -483,7 +483,7 @@ entities:
     name: Lights On
 ```
 
-**Example 3: Trigger when entering AUTO state**
+**Example 3: Trigger when entering AUTO_TIMEOUT state**
 ```yaml
 automation:
   - alias: "Kitchen lights entering countdown"
@@ -491,7 +491,7 @@ automation:
       - platform: state
         entity_id: sensor.kitchen_lighting_automation
         attribute: current_state
-        to: "auto"
+        to: "auto-timeout"
     action:
       - service: tts.speak
         data:
@@ -1048,4 +1048,4 @@ logger:
 
 ---
 
-**Last Updated:** December 2, 2025
+**Last Updated:** December 3, 2025

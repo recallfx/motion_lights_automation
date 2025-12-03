@@ -86,8 +86,6 @@ async def test_something(hass: HomeAssistant):
 from custom_components.motion_lights_automation.state_machine import (
     MotionLightsStateMachine,
     StateTransitionEvent,
-)
-from custom_components.motion_lights_automation.const import (
     STATE_IDLE,
     STATE_MOTION_AUTO,
     STATE_AUTO,
@@ -266,12 +264,13 @@ async def test_config_flow_basic(hass):
 
 ```python
 async def test_sensor_state(hass, coordinator):
-    state = hass.states.get("sensor.test_room_motion_lights")
+    state = hass.states.get("sensor.test_room_lighting_automation")
 
     assert state is not None
-    assert state.state == "idle"
-    assert state.attributes["previous_state"] is None
-    assert "time_in_state" in state.attributes
+    # state.state is the human-readable event message (e.g., "Initialized")
+    # current_state attribute contains the state machine state
+    assert state.attributes["current_state"] == "standby"
+    assert "last_transition_time" in state.attributes
 ```
 
 ## Common Test Patterns

@@ -199,34 +199,34 @@ The integration operates through a 7-state machine:
 
 ```
 ┌─────────┐
-│  IDLE   │ ← Lights off, no motion
+│ STANDBY │ ← Lights off, ready for motion
 └────┬────┘
      │ motion detected
      ↓
-┌──────────────┐
-│ MOTION_AUTO  │ ← Lights turned on automatically
-└──┬────┬──────┘
-   │    │ motion timer expires
+┌──────────────────┐
+│ MOTION_DETECTED  │ ← Lights turned on automatically
+└──┬────┬──────────┘
+   │    │ motion stops
    │    ↓
-   │  ┌──────┐
-   │  │ AUTO │ ← Motion timer active
-   │  └──┬───┘
+   │  ┌──────────────┐
+   │  │ AUTO_TIMEOUT │ ← Countdown to lights off
+   │  └──┬───────────┘
    │     │ timer expires
    │     ↓
-   │  ┌─────┐
-   │  │IDLE │
-   │  └─────┘
+   │  ┌─────────┐
+   │  │ STANDBY │
+   │  └─────────┘
    │
    │ manual intervention detected
    ↓
-┌───────────────┐
-│ MOTION_MANUAL │ ← Manual control during motion
-└───────┬───────┘
-        │ motion timer expires
+┌──────────────────┐
+│ MOTION_ADJUSTED  │ ← Manual control during motion
+└───────┬──────────┘
+        │ motion stops
         ↓
-   ┌────────┐
-   │ MANUAL │ ← Extended timer active
-   └───┬────┘
+   ┌────────────────┐
+   │ MANUAL_TIMEOUT │ ← Extended timer active
+   └───┬────────────┘
        │ extended timer expires OR lights manually off
        ↓
    ┌─────────────┐
@@ -234,13 +234,13 @@ The integration operates through a 7-state machine:
    └──────┬──────┘
           │ motion detected
           ↓
-        ┌──────────────┐
-        │ MOTION_AUTO  │
-        └──────────────┘
+        ┌──────────────────┐
+        │ MOTION_DETECTED  │
+        └──────────────────┘
 
-┌─────────────┐
-│ OVERRIDDEN  │ ← Override switch ON
-└─────────────┘
+┌──────────┐
+│ DISABLED │ ← Override switch ON
+└──────────┘
 ```
 
 ### Brightness Logic
@@ -407,17 +407,17 @@ The integration creates a sensor entity with comprehensive diagnostic informatio
 **State:** Human-readable event message (e.g., "Lights turned on by motion")
 
 **State Values in `current_state` attribute:**
-- `idle` - No motion, lights off
-- `motion-auto` - Motion detected, lights on automatically
-- `auto` - Automatic mode, motion timer running
-- `motion-manual` - Manual intervention during motion
-- `manual` - Manual mode, extended timer running
+- `standby` - No motion, lights off (ready for motion)
+- `motion-detected` - Motion detected, lights on automatically
+- `auto-timeout` - Motion stopped, countdown to lights off
+- `motion-adjusted` - Manual adjustment detected during motion
+- `manual-timeout` - Manual control, extended timer running
 - `manual-off` - User manually turned off lights
-- `overridden` - Override switch is ON
+- `disabled` - Override switch is ON (automation disabled)
 
 **Key Attributes:**
 ```yaml
-current_state: auto                      # State machine state
+current_state: auto-timeout              # State machine state
 motion_active: false                     # Motion sensor state
 is_dark_inside: true                     # Ambient light condition
 is_house_active: false                   # House active switch state
@@ -429,7 +429,7 @@ total_lights: 3                          # Total configured lights
 timers:                                  # Active timer details
   motion:
     remaining_seconds: 245
-    end_time: "2025-12-02T10:35:30"
+    end_time: "2025-12-03T10:35:30"
 event_log:                               # Human-readable event history
   - "10:30:45 - Lights turned on by motion"
 ```
@@ -580,6 +580,21 @@ The simulation runs the actual `MotionLightsCoordinator` with mock services, pro
 
 ## Changelog
 
+### 5.12.0
+
+State names have been updated for clarity. The state machine now uses more descriptive names that better reflect what's happening:
+
+| Old Name | New Name | Description |
+|----------|----------|-------------|
+| `idle` | `standby` | Ready and waiting for motion |
+| `motion-auto` | `motion-detected` | Motion active, lights on automatically |
+| `auto` | `auto-timeout` | Motion stopped, countdown running |
+| `motion-manual` | `motion-adjusted` | Manual adjustment during motion |
+| `manual` | `manual-timeout` | Manual control, extended timer running |
+| `overridden` | `disabled` | Override switch active |
+
+The old names continue to work in code via legacy aliases, but sensor attributes now report the new names.
+
 ### 5.3.0
 
 Added **YAML Configuration Support**. The integration now supports both UI-based configuration (config flow) and YAML configuration in `configuration.yaml`.
@@ -671,4 +686,4 @@ If this project helps you, please give it a ⭐️!
 
 ---
 
-**Last Updated:** December 2, 2025
+**Last Updated:** December 3, 2025
