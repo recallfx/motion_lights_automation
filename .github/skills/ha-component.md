@@ -5,29 +5,13 @@
 This custom component uses a modular coordinator pattern with these core modules:
 
 - `motion_coordinator.py` - Main coordinator that wires components together, delegates logic to specialized modules
-- `state_machine.py` - Extends `BaseStateMachine` from core, manages 7 states using `dt_util.now()` for HA time
-- `timer_manager.py` - Extends `BaseTimerManager` from core, uses HA event loop scheduling via `hass.loop.call_later()`
+- `state_machine.py` - State machine managing 7 states using `dt_util.now()` for HA time
+- `timer_manager.py` - Timer management using HA event loop scheduling via `hass.loop.call_later()`
 - `light_controller.py` - Controls lights with pluggable brightness/selection strategies
 - `triggers.py` - Event handlers for motion sensors and override switches
 - `manual_detection.py` - Detects manual light adjustments using context tracking
 - `config_flow.py` - Two-step UI configuration (basic entities, advanced options)
 - `sensor.py` - Diagnostic sensor exposing state machine info
-
-## Core Module (`core/`)
-
-Shared logic used by both HA component and simulation:
-
-```python
-from .core import (
-    BaseStateMachine,      # State machine with transition definitions
-    BaseTimer,             # Abstract timer with start/cancel/extend
-    BaseTimerManager,      # Abstract timer manager
-    StateTransitionEvent,  # MOTION_ON, MOTION_OFF, OVERRIDE_ON, etc.
-    TimerType,            # MOTION, EXTENDED, CUSTOM
-    STATE_IDLE, STATE_AUTO, STATE_MANUAL, STATE_MANUAL_OFF,
-    STATE_MOTION_AUTO, STATE_MOTION_MANUAL, STATE_OVERRIDDEN,
-)
-```
 
 ## State Machine
 
@@ -35,13 +19,15 @@ Seven states with defined transitions:
 
 | State | Description |
 |-------|-------------|
-| `idle` | No activity, lights off |
-| `motion-auto` | Motion detected, lights auto-on |
-| `auto` | Motion cleared, waiting for timeout |
-| `manual` | User manually adjusted lights |
-| `motion-manual` | Motion while in manual mode |
+| `standby` | No activity, lights off |
+| `motion-detected` | Motion detected, lights auto-on |
+| `auto-timeout` | Motion cleared, waiting for timeout |
+| `manual-timeout` | User manually adjusted lights |
+| `motion-adjusted` | Motion while in manual mode |
 | `manual-off` | User manually turned off lights |
-| `overridden` | Override switch active |
+| `disabled` | Override switch active |
+
+Legacy aliases exist for backward compatibility: `STATE_IDLE`, `STATE_MOTION_AUTO`, `STATE_AUTO`, etc.
 
 Transition events: `MOTION_ON`, `MOTION_OFF`, `OVERRIDE_ON`, `OVERRIDE_OFF`, `MANUAL_INTERVENTION`, `MANUAL_OFF_INTERVENTION`, `TIMER_EXPIRED`, `LIGHTS_ALL_OFF`
 
@@ -52,7 +38,7 @@ Two primary timers:
 - **EXTENDED timer** (`extended_timeout`) - Long timeout for manual states (default 20 min)
 
 ```python
-# HA Timer uses event loop
+# Timer uses HA event loop
 self._handle = self.hass.loop.call_later(
     self.duration,
     lambda: self.hass.async_create_task(self._async_expire()),
@@ -102,19 +88,15 @@ vol.All(cv.ensure_list, [cv.entity_id])  # For multi-entity fields
 ```
 custom_components/motion_lights_automation/
 ├── __init__.py           # Platform setup
-├── const.py              # Constants (use STATE_* from core)
+├── const.py              # Constants
 ├── motion_coordinator.py # Main coordinator
-├── state_machine.py      # HA StateMachine (extends BaseStateMachine)
-├── timer_manager.py      # HA TimerManager (extends BaseTimerManager)
+├── state_machine.py      # State machine with transitions
+├── timer_manager.py      # Timer management
 ├── light_controller.py   # Light control strategies
 ├── triggers.py           # Motion/override triggers
 ├── manual_detection.py   # Manual intervention detection
 ├── config_flow.py        # UI configuration
 ├── sensor.py             # Diagnostic sensor
-├── core/                 # Shared logic
-│   ├── __init__.py
-│   ├── state_machine.py  # BaseStateMachine
-│   └── timer_manager.py  # BaseTimer, BaseTimerManager
 └── translations/
     └── en.json
 ```
@@ -154,4 +136,4 @@ class CustomManualStrategy(ManualInterventionStrategy):
 - Don't use `timer._start_time` (private) - use `timer.end_time` or `timer.remaining_seconds`
 - Import from `custom_components.motion_lights_automation`, not `homeassistant.components.motion_lights_automation`
 - State sensor updates via `coordinator.async_update_listeners()`, not direct `async_write_ha_state()`
-- State strings use lowercase with hyphens: `STATE_MOTION_AUTO = "motion-auto"`
+- State strings use lowercase with hyphens: `STATE_MOTION_DETECTED = "motion-detected"`

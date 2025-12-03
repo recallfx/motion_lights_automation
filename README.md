@@ -565,6 +565,17 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+### Simulation
+
+A web-based simulation helps test and debug the state machine without deploying to Home Assistant:
+
+```bash
+uv run motion-sim
+# Open http://localhost:8093
+```
+
+The simulation runs the actual `MotionLightsCoordinator` with mock services, providing 100% behavior fidelity with production. See [simulation/README.md](simulation/README.md) for details.
+
 ---
 
 ## Changelog

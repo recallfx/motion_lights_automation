@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-motion-sim = "simulation.server:run_server"
+motion-sim = "simulation.ha_simulation:run_server"
 
 [tool.setuptools.packages.find]
 include = ["simulation*", "custom_components*"]

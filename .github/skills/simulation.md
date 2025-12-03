@@ -2,65 +2,47 @@
 
 ## Architecture
 
-The simulation provides a standalone testing environment that uses the same core logic as the HA component:
+The simulation uses a real Home Assistant instance with the actual `MotionLightsCoordinator`:
 
 ```
 simulation/
 ├── __init__.py
-├── server.py           # FastAPI/Starlette web server with WebSocket
-├── sim_coordinator.py  # Simulation coordinator using core module
+├── ha_simulation.py    # HA-based simulation server
 └── static/
-    └── index.html      # Industrial dashboard UI with Lit components
+    ├── index.html      # Industrial dashboard UI
+    └── js/             # Lit web components
 ```
 
-## Core Module Integration
+## HA-Based Simulation
 
-The simulation imports shared logic from the HA component's core module:
+The simulation runs the real coordinator inside a minimal HA instance:
 
 ```python
-from custom_components.motion_lights_automation.core import (
-    BaseStateMachine,
-    BaseTimer,
-    BaseTimerManager,
-    StateTransitionEvent,
-    TimerType,
-    STATE_IDLE, STATE_AUTO, STATE_MANUAL, STATE_MANUAL_OFF,
-    STATE_MOTION_AUTO, STATE_MOTION_MANUAL, STATE_OVERRIDDEN,
-)
+from homeassistant.core import HomeAssistant
+from custom_components.motion_lights_automation import MotionLightsCoordinator
+
+class HASimulationServer:
+    async def _init_hass(self):
+        self.hass = HomeAssistant("/tmp/ha_sim_config")
+        await self.hass.async_start()
+
+        # Register mock light services
+        self._setup_mock_services()
+
+        # Create real coordinator
+        self.coordinator = MotionLightsCoordinator(self.hass, config_entry)
+        await self.coordinator.async_setup_listeners()
 ```
 
-## SimMotionCoordinator
-
-Extends core classes with asyncio-based timing:
-
+Mock services preserve context to avoid false manual detection:
 ```python
-class SimTimer(BaseTimer):
-    """Asyncio-based timer for simulation."""
-
-    def _get_current_time(self) -> datetime:
-        return datetime.fromtimestamp(time.time())
-
-    def start(self) -> None:
-        self._do_start()
-        self._task = asyncio.create_task(self._timer_task())
-
-    def cancel(self) -> None:
-        self._do_cancel()
-        if self._task:
-            self._task.cancel()
-
-class SimTimerManager(BaseTimerManager):
-    """Timer manager using asyncio."""
-
-    def create_timer(self, timer_type, callback, duration, name) -> BaseTimer:
-        return SimTimer(timer_type, callback, duration, name)
-
-class SimMotionCoordinator:
-    """Uses BaseStateMachine directly for state transitions."""
-
-    def __init__(self):
-        self._state_machine = BaseStateMachine()
-        self._timer_manager = SimTimerManager(on_timer_expired=self._on_timer_expired)
+async def mock_turn_on(call):
+    for entity_id in call.data.get("entity_id", []):
+        self.hass.states.async_set(
+            entity_id, "on",
+            {"brightness": call.data.get("brightness", 255)},
+            context=call.context  # Preserve context!
+        )
 ```
 
 ## WebSocket API
@@ -88,13 +70,13 @@ ws.onmessage = (event) => {
 ## Running the Simulation
 
 ```bash
-uv run python run_simulation.py
-# Opens http://localhost:8092
+uv run motion-sim
+# Opens http://localhost:8093
 ```
 
 ## Industrial Dashboard UI
 
-The UI uses vanilla HTML/CSS/JS with an industrial control panel aesthetic:
+The UI uses Lit web components with an industrial control panel aesthetic:
 
 ### CSS Variables
 ```css
@@ -123,133 +105,49 @@ The UI uses vanilla HTML/CSS/JS with an industrial control panel aesthetic:
                     └─────────────┘
 ```
 
-### Component Structure
-
-**Clickable input components** (Motion, Override):
-```html
-<div class="component-box clickable" data-entity="binary_sensor.motion">
-    <div class="component-icon">◉</div>
-    <div class="component-label">Motion</div>
-    <div class="component-status">OFF</div>
-</div>
-```
-
-**State display** with chip styling:
-```html
-<div class="state-chip" data-state="motion-auto">MOTION-AUTO</div>
-```
-
-**Timer progress bars**:
-```html
-<div class="timer-item">
-    <span class="timer-name">motion</span>
-    <div class="timer-bar">
-        <div class="timer-progress" style="width: 75%"></div>
-    </div>
-    <span class="timer-remaining">3:45</span>
-</div>
-```
-
-**Event log**:
-```html
-<div class="event-log">
-    <div class="event-entry transition">State: idle → motion-auto</div>
-    <div class="event-entry sensor">Motion: ON</div>
-</div>
-```
-
 ### State Chip Colors
 ```css
-.state-chip[data-state="idle"] { background: var(--text-dim); }
-.state-chip[data-state="motion-auto"] { background: var(--success); }
-.state-chip[data-state="auto"] { background: #3b82f6; }
-.state-chip[data-state="manual"] { background: var(--warning); }
+.state-chip[data-state="standby"] { background: var(--text-dim); }
+.state-chip[data-state="motion-detected"] { background: var(--success); }
+.state-chip[data-state="auto-timeout"] { background: #3b82f6; }
+.state-chip[data-state="manual-timeout"] { background: var(--warning); }
 .state-chip[data-state="manual-off"] { background: #f97316; }
-.state-chip[data-state="motion-manual"] { background: #a855f7; }
-.state-chip[data-state="overridden"] { background: var(--highlight); }
+.state-chip[data-state="motion-adjusted"] { background: #a855f7; }
+.state-chip[data-state="disabled"] { background: var(--highlight); }
 ```
 
-## Lit Components (Future)
+## Lit Components
 
-When adding Lit web components:
+Web components in `static/js/`:
 
 ```javascript
 import { LitElement, html, css } from 'lit';
 
-class MotionSensorComponent extends LitElement {
+class FlowComponent extends LitElement {
     static properties = {
-        entityId: { type: String },
-        state: { type: Boolean },
+        state: { type: Object },
     };
-
-    static styles = css`
-        :host { display: block; }
-        .component-box { /* ... */ }
-    `;
 
     render() {
         return html`
-            <div class="component-box ${this.state ? 'active' : ''}"
-                 @click=${this._toggle}>
-                <div class="component-icon">◉</div>
-                <div class="component-label">Motion</div>
-                <div class="component-status">${this.state ? 'ON' : 'OFF'}</div>
+            <div class="flow-diagram">
+                <motion-box .active=${this.state?.motion}></motion-box>
+                <state-display .state=${this.state?.current_state}></state-display>
+                <light-output .brightness=${this.state?.brightness}></light-output>
             </div>
         `;
     }
-
-    async _toggle() {
-        await fetch(`/api/sensor/${this.entityId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: !this.state }),
-        });
-    }
 }
-customElements.define('motion-sensor', MotionSensorComponent);
-```
-
-## SimConfig
-
-Default configuration:
-```python
-@dataclass
-class SimConfig:
-    lights: list[str] = field(default_factory=lambda: ["light.room"])
-    motion_sensors: list[str] = field(default_factory=lambda: ["binary_sensor.motion"])
-    override_switch: str | None = "switch.override"
-    no_motion_wait: int = 300      # 5 minutes
-    extended_timeout: int = 1200   # 20 minutes
-    motion_delay: int = 0
-    motion_activation: bool = True
-    brightness_active: int = 80
-    brightness_inactive: int = 10
-    is_house_active: bool = True
-    is_dark_inside: bool = True
 ```
 
 ## Event Flow
 
-1. User clicks Motion component → `POST /api/sensor/binary_sensor.motion`
-2. Server calls `coordinator.process_sensor_event(entity_id, state)`
-3. Coordinator triggers state machine transition
-4. State machine logs: `State transition: idle -> motion-auto`
+1. User clicks Motion component → `POST /api/sensor/binary_sensor.sim_motion`
+2. Server sets entity state in HA → `hass.states.async_set()`
+3. State change triggers coordinator's motion handler
+4. Coordinator triggers state machine transition
 5. WebSocket broadcasts updated state to all clients
 6. UI updates state chip, timers, event log
-
-## Testing Simulation Code
-
-```python
-from simulation.sim_coordinator import SimMotionCoordinator, SimConfig
-from custom_components.motion_lights_automation.core import STATE_IDLE, STATE_MOTION_AUTO
-
-async def test_motion_activates_lights():
-    coord = SimMotionCoordinator()
-    assert coord._current_state == STATE_IDLE
-
-    await coord.process_sensor_event('binary_sensor.motion', True)
-    assert coord._current_state == STATE_MOTION_AUTO
-```
 
 ## Debugging
 
@@ -257,11 +155,10 @@ Enable debug logging:
 ```python
 import logging
 logging.getLogger("simulation").setLevel(logging.DEBUG)
-logging.getLogger("custom_components.motion_lights_automation.core").setLevel(logging.DEBUG)
+logging.getLogger("custom_components.motion_lights_automation").setLevel(logging.DEBUG)
 ```
 
 State machine transitions are logged:
 ```
-INFO:custom_components.motion_lights_automation.core.state_machine:State transition: idle -> motion-auto (event: motion_on)
-INFO:simulation.sim_coordinator:State: idle → motion-auto (motion_on)
+INFO:custom_components.motion_lights_automation.state_machine:State transition: standby -> motion-detected (event: motion_on)
 ```
