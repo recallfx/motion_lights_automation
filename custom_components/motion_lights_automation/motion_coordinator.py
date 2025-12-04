@@ -1190,12 +1190,23 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timer_info = self.timer_manager.get_info()
         light_info = self.light_controller.get_info()
 
+        # Calculate startup grace period status
+        seconds_since_startup = (dt_util.now() - self._startup_time).total_seconds()
+        in_grace_period = seconds_since_startup < self._startup_grace_period
+        grace_period_remaining = (
+            int(self._startup_grace_period - seconds_since_startup)
+            if in_grace_period
+            else 0
+        )
+
         return {
             "current_state": self.state_machine.current_state,
             "motion_active": context.get("motion_active", False),
             "is_dark_inside": context.get("is_dark_inside", True),
             "is_house_active": context.get("is_house_active", False),
             "motion_activation_enabled": self.motion_activation,
+            "startup_grace_period_active": in_grace_period,
+            "startup_grace_period_remaining": grace_period_remaining,
             "timers": timer_info.get("timers", {}),
             "lights_on": light_info.get("lights_on", 0),
             "total_lights": light_info.get("total_lights", 0),

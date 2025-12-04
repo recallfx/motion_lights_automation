@@ -20,7 +20,7 @@ attributes focused on what's actually useful for troubleshooting.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -89,8 +89,21 @@ class MotionLightsDiagnosticSensor(SensorEntity):
             "entry_type": "service",
         }
 
-        # Register update listener
-        self._coordinator.async_add_listener(self._handle_coordinator_update)
+        self._remove_listener: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Register listener when entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        self._remove_listener = self._coordinator.async_add_listener(
+            self._handle_coordinator_update
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister listener when entity is removed."""
+        if self._remove_listener:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -128,6 +141,13 @@ class MotionLightsDiagnosticSensor(SensorEntity):
             "is_house_active": diagnostic_data.get("is_house_active"),
             "motion_activation_enabled": diagnostic_data.get(
                 "motion_activation_enabled"
+            ),
+            # Startup grace period (manual detection disabled during this time)
+            "startup_grace_period_active": diagnostic_data.get(
+                "startup_grace_period_active"
+            ),
+            "startup_grace_period_remaining": diagnostic_data.get(
+                "startup_grace_period_remaining"
             ),
             # Timer state
             "timers": timer_info,
