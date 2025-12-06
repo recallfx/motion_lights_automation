@@ -157,6 +157,7 @@ class LightController:
 
     def any_lights_on(self) -> bool:
         """Check if any tracked lights are currently on."""
+        self.refresh_all_states()
         return any(state.is_on for state in self._light_states.values())
 
     def refresh_all_states(self) -> None:
