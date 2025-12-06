@@ -303,7 +303,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if override_trigger and override_trigger.is_active():
             self.state_machine.force_state(STATE_OVERRIDDEN)
             self._log_human_event("Integration restarted (override active)")
-        elif self.light_controller.any_lights_on():
+        elif self.light_controller.any_lights_on(refresh=True):
             # Lights are on after restart - we can't know if they were manual or auto
             # Safest approach: assume automation control (AUTO or MOTION_AUTO)
             # Start appropriate timer so lights turn off if conditions aren't met
@@ -472,7 +472,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._log_event(
                 "override_off", {"current_state": self.state_machine.current_state}
             )
-            if self.light_controller.any_lights_on():
+            if self.light_controller.any_lights_on(refresh=True):
                 self._log_human_event("Override released (lights on)")
                 result = self.state_machine.transition(
                     StateTransitionEvent.OVERRIDE_OFF,
@@ -797,7 +797,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         When house active state changes, adjust brightness of currently lit lights:
         - If house becomes active: increase brightness
-        - If house becomes inactive: decrease brightness
+        - If house becomes inactive: do nothing (keep current brightness until off)
         """
         try:
             new_state = event.data.get("new_state")
@@ -836,13 +836,18 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 STATE_MOTION_MANUAL,
                 STATE_MANUAL,
             ):
-                if self.light_controller.any_lights_on():
-                    _LOGGER.debug(
-                        "House active changed in %s with lights on - adjusting brightness",
-                        current,
-                    )
-                    # Re-apply lights with new brightness based on updated house_active state
-                    await self._async_turn_on_lights()
+                if self.light_controller.any_lights_on(refresh=True):
+                    if not new_is_active:
+                        _LOGGER.debug(
+                            "House became inactive but lights are on - keeping current brightness"
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "House active changed in %s with lights on - adjusting brightness",
+                            current,
+                        )
+                        # Re-apply lights with new brightness based on updated house_active state
+                        await self._async_turn_on_lights()
 
             self._update_data()
         except Exception:
@@ -992,11 +997,11 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_turn_on_lights(self) -> None:
         """Turn on lights."""
         context = self._get_context()
-        lights_were_on = self.light_controller.any_lights_on()
+        lights_were_on = self.light_controller.any_lights_on(refresh=True)
 
         await self.light_controller.turn_on_auto_lights(context)
 
-        lights_are_on = self.light_controller.any_lights_on()
+        lights_are_on = self.light_controller.any_lights_on(refresh=True)
 
         # Log human event based on what actually happened
         if lights_are_on and not lights_were_on:

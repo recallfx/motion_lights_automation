@@ -155,9 +155,10 @@ class LightController:
         """Get tracked state for a light."""
         return self._light_states.get(entity_id)
 
-    def any_lights_on(self) -> bool:
+    def any_lights_on(self, refresh: bool = False) -> bool:
         """Check if any tracked lights are currently on."""
-        self.refresh_all_states()
+        if refresh:
+            self.refresh_all_states()
         return any(state.is_on for state in self._light_states.values())
 
     def refresh_all_states(self) -> None:
