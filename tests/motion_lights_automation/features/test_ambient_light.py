@@ -10,6 +10,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -549,6 +550,67 @@ class TestHouseActiveIntegration:
             hass.states.async_set("input_boolean.house_active", STATE_ON)
             await hass.async_block_till_done()
             mock_turn_on.assert_called_once()
+
+        coordinator.async_cleanup_listeners()
+
+    async def test_house_becomes_inactive_keeps_brightness(
+        self, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+    ):
+        """Test that house becoming inactive keeps current brightness without adjustment."""
+        entry = ConfigEntry(
+            version=1,
+            minor_version=1,
+            domain=DOMAIN,
+            title="Test House Inactive",
+            data={
+                CONF_NAME: "Test Room",
+                CONF_MOTION_ENTITY: ["binary_sensor.motion"],
+                CONF_LIGHTS: ["light.test"],
+                CONF_AMBIENT_LIGHT_SENSOR: "binary_sensor.ambient",
+                CONF_HOUSE_ACTIVE: "input_boolean.house_active",
+                CONF_MOTION_ACTIVATION: True,
+            },
+            options={},
+            entry_id="test_house_inactive",
+            source="user",
+            unique_id="test_house_inactive_unique",
+            discovery_keys={},
+        )
+
+        hass.states.async_set("binary_sensor.motion", STATE_OFF)
+        hass.states.async_set("light.test", STATE_OFF)
+        hass.states.async_set("binary_sensor.ambient", STATE_ON)  # Dark
+        hass.states.async_set("input_boolean.house_active", STATE_ON)  # Start active
+
+        coordinator = MotionLightsCoordinator(hass, entry)
+        await coordinator.async_setup_listeners()
+
+        # Turn on motion to activate lights
+        hass.states.async_set("binary_sensor.motion", STATE_ON)
+        await hass.async_block_till_done()
+        assert coordinator.state_machine.current_state == STATE_MOTION_AUTO
+
+        # Simulate lights on with a specific brightness
+        hass.states.async_set("light.test", STATE_ON, {"brightness": 204})  # 80%
+        await hass.async_block_till_done()
+
+        # Deactivate house - should NOT adjust brightness
+        with patch.object(
+            coordinator.light_controller, "turn_on_auto_lights", new_callable=AsyncMock
+        ) as mock_turn_on:
+            with caplog.at_level(logging.DEBUG):
+                hass.states.async_set("input_boolean.house_active", STATE_OFF)
+                await hass.async_block_till_done()
+                
+                # Verify turn_on_auto_lights was NOT called
+                mock_turn_on.assert_not_called()
+                
+                # Verify the debug log message was generated
+                assert any(
+                    "House became inactive but lights are on - keeping current brightness"
+                    in record.message
+                    for record in caplog.records
+                )
 
         coordinator.async_cleanup_listeners()
 
