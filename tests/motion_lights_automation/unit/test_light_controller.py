@@ -165,6 +165,38 @@ class TestLightController:
         controller.update_light_state("light.on", ha_state)
         assert controller.any_lights_on() is True
 
+    def test_any_lights_on_with_refresh_false(self, hass: HomeAssistant):
+        """Test any_lights_on with refresh=False uses cached state."""
+        lights = ["light.c1"]
+        controller = LightController(hass, lights)
+
+        # Set initial state in Home Assistant and populate cache
+        hass.states.async_set("light.c1", "on", {"brightness": 128})
+        controller.refresh_all_states()
+        assert controller.any_lights_on() is True
+
+        # Change state in Home Assistant but don't refresh cache
+        hass.states.async_set("light.c1", "off", {})
+
+        # With refresh=False (default), should still use cached state (on)
+        assert controller.any_lights_on(refresh=False) is True
+
+    def test_any_lights_on_with_refresh_true(self, hass: HomeAssistant):
+        """Test any_lights_on with refresh=True gets current state from Home Assistant."""
+        lights = ["light.c1"]
+        controller = LightController(hass, lights)
+
+        # Set initial state in Home Assistant and populate cache
+        hass.states.async_set("light.c1", "on", {"brightness": 128})
+        controller.refresh_all_states()
+        assert controller.any_lights_on() is True
+
+        # Change state in Home Assistant to off
+        hass.states.async_set("light.c1", "off", {})
+
+        # With refresh=True, should get current state from Home Assistant (off)
+        assert controller.any_lights_on(refresh=True) is False
+
     def test_refresh_all_states(self, hass: HomeAssistant):
         """Test refresh_all_states method."""
         lights = ["light.c1", "light.c2", "light.bg"]
