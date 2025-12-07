@@ -601,10 +601,10 @@ class TestHouseActiveIntegration:
             with caplog.at_level(logging.DEBUG):
                 hass.states.async_set("input_boolean.house_active", STATE_OFF)
                 await hass.async_block_till_done()
-                
+
                 # Verify turn_on_auto_lights was NOT called
                 mock_turn_on.assert_not_called()
-                
+
                 # Verify the debug log message was generated
                 assert any(
                     "House became inactive but lights are on - keeping current brightness"
