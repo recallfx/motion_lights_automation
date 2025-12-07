@@ -170,14 +170,9 @@ class TestLightController:
         lights = ["light.c1"]
         controller = LightController(hass, lights)
 
-        # Set initial state in Home Assistant
+        # Set initial state in Home Assistant and populate cache
         hass.states.async_set("light.c1", "on", {"brightness": 128})
-
-        # Update cached state to show light is on
-        ha_state = MagicMock()
-        ha_state.state = "on"
-        ha_state.attributes = {"brightness": 128}
-        controller.update_light_state("light.c1", ha_state)
+        controller.refresh_all_states()
         assert controller.any_lights_on() is True
 
         # Change state in Home Assistant but don't refresh cache
@@ -191,14 +186,9 @@ class TestLightController:
         lights = ["light.c1"]
         controller = LightController(hass, lights)
 
-        # Set initial state in Home Assistant
+        # Set initial state in Home Assistant and populate cache
         hass.states.async_set("light.c1", "on", {"brightness": 128})
-
-        # Update cached state to show light is on
-        ha_state = MagicMock()
-        ha_state.state = "on"
-        ha_state.attributes = {"brightness": 128}
-        controller.update_light_state("light.c1", ha_state)
+        controller.refresh_all_states()
         assert controller.any_lights_on() is True
 
         # Change state in Home Assistant to off
