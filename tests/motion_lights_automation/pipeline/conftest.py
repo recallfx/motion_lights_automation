@@ -216,10 +216,17 @@ class CoordinatorHarness:
         self, entity_id: str = "light.ceiling", brightness: int = 200
     ) -> None:
         """Simulate user manually turning on a light."""
-        with patch.object(
-            self.coordinator.light_controller,
-            "is_integration_context",
-            return_value=False,
+        with (
+            patch.object(
+                self.coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
+            ),
+            patch.object(
+                self.coordinator.light_controller,
+                "is_expected_state_change",
+                return_value=False,
+            ),
         ):
             self.hass.states.async_set(
                 entity_id, "on", attributes={"brightness": brightness}
@@ -228,10 +235,17 @@ class CoordinatorHarness:
 
     async def manual_light_off(self, entity_id: str = "light.ceiling") -> None:
         """Simulate user manually turning off a light."""
-        with patch.object(
-            self.coordinator.light_controller,
-            "is_integration_context",
-            return_value=False,
+        with (
+            patch.object(
+                self.coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
+            ),
+            patch.object(
+                self.coordinator.light_controller,
+                "is_expected_state_change",
+                return_value=False,
+            ),
         ):
             self.hass.states.async_set(entity_id, "off")
             await self.hass.async_block_till_done()
@@ -240,10 +254,17 @@ class CoordinatorHarness:
         self, entity_id: str = "light.ceiling", brightness: int = 100
     ) -> None:
         """Simulate user changing brightness on an already-on light."""
-        with patch.object(
-            self.coordinator.light_controller,
-            "is_integration_context",
-            return_value=False,
+        with (
+            patch.object(
+                self.coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
+            ),
+            patch.object(
+                self.coordinator.light_controller,
+                "is_expected_state_change",
+                return_value=False,
+            ),
         ):
             self.hass.states.async_set(
                 entity_id, "on", attributes={"brightness": brightness}

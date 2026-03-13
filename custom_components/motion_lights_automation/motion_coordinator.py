@@ -126,6 +126,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track which lights we've seen to skip manual detection on first KNX sync
         self._lights_initialized: set[str] = set()
 
+        # Reconciliation handle for periodic state verification
+        self._reconciliation_handle = None
+
+        # Motion watchdog: max time in MOTION_AUTO/MOTION_MANUAL before re-checking sensor
+        self._motion_watchdog_handle = None
+        self._motion_watchdog_seconds = 1800  # 30 minutes
+
+        # Reconciliation interval
+        self._reconciliation_interval = 300  # 5 minutes
+
     def _load_config(self) -> None:
         """Load configuration."""
         data = self.config_entry.data
@@ -274,6 +284,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Schedule periodic cleanup of old context IDs (every hour)
         self._schedule_periodic_cleanup()
+
+        # Schedule periodic state reconciliation (every 5 minutes)
+        self._schedule_reconciliation()
 
         # Log startup performance
         elapsed = time.monotonic() - start_time
@@ -543,7 +556,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Check for manual intervention
             manual_intervention_handled = False
-            if not self.light_controller.is_integration_context(new_state.context):
+            is_integration = self.light_controller.is_integration_context(
+                new_state.context
+            )
+            # Also check pending commands — catches late KNX confirmations
+            # where context doesn't match because KNX creates its own context
+            if not is_integration:
+                is_integration = self.light_controller.is_expected_state_change(
+                    entity_id, new_state.state
+                )
+            if not is_integration:
                 is_manual = self.manual_detector.check_intervention(
                     entity_id, old_state, new_state, new_state.context
                 )
@@ -881,14 +903,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ========================================================================
 
     def _on_enter_motion_auto(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering MOTION_AUTO - turn on lights."""
+        """Entering MOTION_AUTO - turn on lights and start watchdog."""
         _LOGGER.debug("Entering MOTION_AUTO state (from %s)", from_state)
         # Don't log yet - wait to see if lights actually turn on
         self.hass.async_create_task(self._async_turn_on_lights())
+        self._start_motion_watchdog()
 
     def _on_enter_auto(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering AUTO - start motion timer."""
+        """Entering AUTO - start motion timer, cancel watchdog."""
         _LOGGER.debug("Entering AUTO state - starting motion timer")
+        self._cancel_motion_watchdog()
         self.timer_manager.start_timer(
             "motion",
             TimerType.MOTION,
@@ -896,8 +920,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def _on_enter_manual(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering MANUAL - start extended timer."""
+        """Entering MANUAL - start extended timer, cancel watchdog."""
         _LOGGER.debug("Entering MANUAL state - starting extended timer")
+        self._cancel_motion_watchdog()
         # Only log if transitioning from a state where lights were off or auto-controlled
         if from_state in (STATE_IDLE, STATE_MOTION_AUTO, STATE_AUTO, STATE_MANUAL_OFF):
             self._log_human_event("Lights turned on manually")
@@ -915,7 +940,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_motion_manual(
         self, from_state=None, to_state=None, event=None
     ) -> None:
-        """Entering MOTION_MANUAL - cancel timers while motion is active."""
+        """Entering MOTION_MANUAL - cancel timers while motion is active, start watchdog."""
         _LOGGER.debug(
             "Entering MOTION_MANUAL state - cancelling timers (motion keeps lights on)"
         )
@@ -923,12 +948,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Cancel extended timer - motion keeps lights on
         self.timer_manager.cancel_timer("extended")
         self.timer_manager.cancel_timer("motion")
+        self._start_motion_watchdog()
 
     def _on_enter_manual_off(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering MANUAL_OFF - start extended timer."""
+        """Entering MANUAL_OFF - start extended timer, cancel watchdog."""
         _LOGGER.debug(
             "Entering MANUAL_OFF state - cancelling motion timer, starting extended timer"
         )
+        self._cancel_motion_watchdog()
         self._log_human_event("Lights turned off manually")
         self.timer_manager.cancel_timer("motion")  # Cancel any existing motion timer
         self.timer_manager.start_timer(
@@ -938,8 +965,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def _on_enter_idle(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering IDLE - turn off lights."""
+        """Entering IDLE - turn off lights, cancel watchdog."""
         _LOGGER.debug("Entering IDLE state (from %s) - turning off lights", from_state)
+        self._cancel_motion_watchdog()
         if from_state == STATE_AUTO or from_state == STATE_MOTION_AUTO:
             self._log_human_event("Lights turned off (timeout)")
         elif from_state == STATE_MANUAL or from_state == STATE_MOTION_MANUAL:
@@ -1144,6 +1172,175 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._brightness_mode_is_dim
 
     # ========================================================================
+    # Motion Watchdog
+    # ========================================================================
+
+    def _start_motion_watchdog(self) -> None:
+        """Start watchdog timer that fires after max time in MOTION states.
+
+        Protects against stuck motion sensors that never report "off".
+        When the watchdog fires, it re-checks the actual sensor state.
+        """
+        self._cancel_motion_watchdog()
+        _LOGGER.debug("Starting motion watchdog (%ds)", self._motion_watchdog_seconds)
+        self._motion_watchdog_handle = self.hass.loop.call_later(
+            self._motion_watchdog_seconds,
+            lambda: self.hass.async_create_task(self._async_motion_watchdog_fired()),
+        )
+
+    def _cancel_motion_watchdog(self) -> None:
+        """Cancel the motion watchdog timer."""
+        if self._motion_watchdog_handle is not None:
+            self._motion_watchdog_handle.cancel()
+            self._motion_watchdog_handle = None
+
+    async def _async_motion_watchdog_fired(self) -> None:
+        """Motion watchdog fired — re-check actual motion sensor state.
+
+        If sensor shows off but state machine is in a MOTION state,
+        trigger motion_off to correct the drift.
+        """
+        # Cancel handle properly (not just set to None) to avoid lingering timers
+        self._cancel_motion_watchdog()
+        current = self.state_machine.current_state
+
+        if current not in (STATE_MOTION_AUTO, STATE_MOTION_MANUAL):
+            _LOGGER.debug(
+                "Motion watchdog fired but state is %s — no action needed", current
+            )
+            return
+
+        motion_trigger = self.trigger_manager.get_trigger("motion")
+        if not motion_trigger:
+            return
+
+        # Re-read actual sensor states from HA
+        any_active = False
+        for entity_id in self.motion_entities:
+            state = self.hass.states.get(entity_id)
+            if state and state.state == "on":
+                any_active = True
+                break
+
+        if any_active:
+            _LOGGER.debug(
+                "Motion watchdog: sensor still active after %ds — restarting watchdog",
+                self._motion_watchdog_seconds,
+            )
+            self._start_motion_watchdog()
+        else:
+            _LOGGER.warning(
+                "Motion watchdog: sensor shows off but state is %s — "
+                "likely missed motion_off event, triggering correction",
+                current,
+            )
+            self._log_human_event("Watchdog: corrected stuck motion state")
+            self._handle_motion_off()
+
+    # ========================================================================
+    # Periodic State Reconciliation
+    # ========================================================================
+
+    def _schedule_reconciliation(self) -> None:
+        """Schedule periodic state reconciliation.
+
+        Every 5 minutes, verify that the state machine matches actual
+        light and motion sensor states. Corrects drift from missed KNX events.
+        """
+
+        def _reconciliation_tick() -> None:
+            self.hass.async_create_task(self._async_reconcile_state())
+            self._reconciliation_handle = self.hass.loop.call_later(
+                self._reconciliation_interval, _reconciliation_tick
+            )
+
+        self._reconciliation_handle = self.hass.loop.call_later(
+            self._reconciliation_interval, _reconciliation_tick
+        )
+
+    async def _async_reconcile_state(self) -> None:
+        """Check actual device states against state machine and correct drift.
+
+        Detects three types of drift:
+        1. Motion sensor shows off but state machine is in MOTION state (stuck sensor)
+        2. All lights are off but state machine thinks they're on
+        3. Lights are on but state machine is in IDLE
+        """
+        try:
+            current = self.state_machine.current_state
+
+            # Skip reconciliation in OVERRIDDEN state — user has full control
+            if current == STATE_OVERRIDDEN:
+                return
+
+            # Refresh all light states from HA
+            self.light_controller.refresh_all_states()
+            lights_on = self.light_controller.any_lights_on()
+
+            # Check motion sensor actual state
+            motion_trigger = self.trigger_manager.get_trigger("motion")
+            motion_actually_active = False
+            if motion_trigger:
+                for entity_id in self.motion_entities:
+                    state = self.hass.states.get(entity_id)
+                    if state and state.state == "on":
+                        motion_actually_active = True
+                        break
+
+            # Drift 1: In MOTION state but sensor shows off
+            if current in (STATE_MOTION_AUTO, STATE_MOTION_MANUAL):
+                if not motion_actually_active:
+                    _LOGGER.warning(
+                        "Reconciliation: state is %s but motion sensor shows off — "
+                        "triggering motion_off",
+                        current,
+                    )
+                    self._log_human_event(
+                        "Reconciliation: corrected stale motion state"
+                    )
+                    self._handle_motion_off()
+                    return
+
+            # Drift 2: State machine thinks lights are on, but they're all off
+            if current in (
+                STATE_AUTO,
+                STATE_MOTION_AUTO,
+                STATE_MANUAL,
+                STATE_MOTION_MANUAL,
+            ):
+                if not lights_on:
+                    _LOGGER.warning(
+                        "Reconciliation: state is %s but all lights are off — "
+                        "transitioning to IDLE",
+                        current,
+                    )
+                    self._log_human_event("Reconciliation: lights found off, resetting")
+                    self.timer_manager.cancel_all_timers()
+                    self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
+                    self._update_data()
+                    return
+
+            # Drift 3: State machine is IDLE but lights are actually on
+            if current == STATE_IDLE and lights_on:
+                _LOGGER.warning(
+                    "Reconciliation: state is IDLE but lights are on — "
+                    "transitioning to MANUAL"
+                )
+                self._log_human_event("Reconciliation: lights found on, tracking")
+                self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
+                self._update_data()
+                return
+
+            _LOGGER.debug(
+                "Reconciliation: state %s consistent (lights_on=%s, motion=%s)",
+                current,
+                lights_on,
+                motion_actually_active,
+            )
+        except Exception:
+            _LOGGER.exception("Error during state reconciliation")
+
+    # ========================================================================
     # Data Management
     # ========================================================================
 
@@ -1286,6 +1483,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._cleanup_handle is not None:
             self._cleanup_handle.cancel()
             self._cleanup_handle = None
+
+        # Cancel reconciliation task
+        if self._reconciliation_handle is not None:
+            self._reconciliation_handle.cancel()
+            self._reconciliation_handle = None
+
+        # Cancel motion watchdog
+        self._cancel_motion_watchdog()
 
         # Cancel all timers
         self.timer_manager.cancel_all_timers()
