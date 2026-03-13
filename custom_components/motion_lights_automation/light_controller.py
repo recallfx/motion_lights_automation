@@ -10,6 +10,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
@@ -19,6 +20,15 @@ _LOGGER = logging.getLogger(__name__)
 
 # How long a pending command is considered valid for matching late confirmations
 PENDING_COMMAND_TTL_SECONDS = 30
+
+
+@dataclass
+class PendingCommand:
+    """A light command awaiting KNX confirmation."""
+
+    target_state: str
+    commanded_at: datetime
+    context_id: str
 
 
 @dataclass
@@ -141,8 +151,7 @@ class LightController:
         self._context_tracking: set[str] = set()
 
         # Track pending commands for matching late KNX confirmations
-        # {entity_id: {"target_state": "on"/"off", "commanded_at": datetime, "context_id": str}}
-        self._pending_commands: dict[str, dict[str, Any]] = {}
+        self._pending_commands: dict[str, PendingCommand] = {}
 
     def set_brightness_strategy(self, strategy: BrightnessStrategy) -> None:
         """Set the brightness selection strategy."""
@@ -280,11 +289,11 @@ class LightController:
             self._context_tracking.add(ctx.id)
 
             # Record pending command BEFORE sending (catches late confirmations)
-            self._pending_commands[entity_id] = {
-                "target_state": state,
-                "commanded_at": dt_util.now(),
-                "context_id": ctx.id,
-            }
+            self._pending_commands[entity_id] = PendingCommand(
+                target_state=state,
+                commanded_at=dt_util.now(),
+                context_id=ctx.id,
+            )
 
             # Call light service with 10-second timeout
             try:
@@ -345,13 +354,13 @@ class LightController:
             return False
 
         # Check if the pending command matches and is still within TTL
-        age = (dt_util.now() - pending["commanded_at"]).total_seconds()
+        age = (dt_util.now() - pending.commanded_at).total_seconds()
         if age > PENDING_COMMAND_TTL_SECONDS:
             # Command is too old, remove it
             del self._pending_commands[entity_id]
             return False
 
-        if pending["target_state"] == new_state_str:
+        if pending.target_state == new_state_str:
             _LOGGER.debug(
                 "State change for %s matches pending command (age: %.1fs) — "
                 "treating as integration-controlled",
@@ -377,7 +386,7 @@ class LightController:
         expired = [
             eid
             for eid, cmd in self._pending_commands.items()
-            if (now - cmd["commanded_at"]).total_seconds() > PENDING_COMMAND_TTL_SECONDS
+            if (now - cmd.commanded_at).total_seconds() > PENDING_COMMAND_TTL_SECONDS
         ]
         for eid in expired:
             del self._pending_commands[eid]

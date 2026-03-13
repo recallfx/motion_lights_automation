@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 
+from custom_components.motion_lights_automation.light_controller import PendingCommand
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
@@ -48,11 +49,11 @@ class TestPendingCommandTracking:
         lc = harness.coordinator.light_controller
         from homeassistant.util import dt as dt_util
 
-        lc._pending_commands["light.ceiling"] = {
-            "target_state": "on",
-            "commanded_at": dt_util.now(),
-            "context_id": "some-old-context",
-        }
+        lc._pending_commands["light.ceiling"] = PendingCommand(
+            target_state="on",
+            commanded_at=dt_util.now(),
+            context_id="some-old-context",
+        )
 
         # Simulate light turning on via KNX (different context)
         # This should be caught by pending command tracking, not flagged as manual
@@ -74,11 +75,11 @@ class TestPendingCommandTracking:
         from homeassistant.util import dt as dt_util
 
         # Record a pending command that's 60 seconds old (past 30s TTL)
-        lc._pending_commands["light.ceiling"] = {
-            "target_state": "on",
-            "commanded_at": dt_util.now() - timedelta(seconds=60),
-            "context_id": "old-context",
-        }
+        lc._pending_commands["light.ceiling"] = PendingCommand(
+            target_state="on",
+            commanded_at=dt_util.now() - timedelta(seconds=60),
+            context_id="old-context",
+        )
 
         # Should NOT match — too old
         assert not lc.is_expected_state_change("light.ceiling", "on")
@@ -95,11 +96,11 @@ class TestPendingCommandTracking:
 
         from homeassistant.util import dt as dt_util
 
-        lc._pending_commands["light.ceiling"] = {
-            "target_state": "on",
-            "commanded_at": dt_util.now(),
-            "context_id": "some-context",
-        }
+        lc._pending_commands["light.ceiling"] = PendingCommand(
+            target_state="on",
+            commanded_at=dt_util.now(),
+            context_id="some-context",
+        )
 
         # 'off' should not match a pending 'on' command
         assert not lc.is_expected_state_change("light.ceiling", "off")
@@ -112,11 +113,11 @@ class TestPendingCommandTracking:
 
         from homeassistant.util import dt as dt_util
 
-        lc._pending_commands["light.ceiling"] = {
-            "target_state": "on",
-            "commanded_at": dt_util.now(),
-            "context_id": "some-context",
-        }
+        lc._pending_commands["light.ceiling"] = PendingCommand(
+            target_state="on",
+            commanded_at=dt_util.now(),
+            context_id="some-context",
+        )
 
         assert lc.is_expected_state_change("light.ceiling", "on")
         # Second call should not match — already consumed
@@ -257,27 +258,6 @@ class TestMotionWatchdog:
 class TestReconciliation:
     """Test periodic state reconciliation catches drift from missed events."""
 
-    async def test_reconciliation_motion_state_but_sensor_off(
-        self, hass: HomeAssistant
-    ) -> None:
-        """If in MOTION_AUTO but motion sensor shows off, reconcile to AUTO."""
-        harness = await CoordinatorHarness.create(hass)
-        await harness.motion_on()
-        harness.assert_state(STATE_MOTION_AUTO)
-
-        # Simulate missed motion_off: set sensor to off without triggering listener
-        hass.states.async_set("binary_sensor.motion", "off")
-
-        # Force state to MOTION_AUTO (as if we missed the event)
-        harness.force_state(STATE_MOTION_AUTO)
-
-        await harness.coordinator._async_reconcile_state()
-
-        # Should have corrected to AUTO (motion_off handler runs)
-        harness.assert_state(STATE_AUTO)
-        harness.assert_event_log_contains("Reconciliation")
-        await harness.cleanup()
-
     async def test_reconciliation_lights_on_state_but_actually_off(
         self, hass: HomeAssistant
     ) -> None:
@@ -350,28 +330,6 @@ class TestReconciliation:
         await harness.coordinator._async_reconcile_state()
 
         harness.assert_state(STATE_IDLE)
-        await harness.cleanup()
-
-    async def test_reconciliation_motion_manual_sensor_off(
-        self, hass: HomeAssistant
-    ) -> None:
-        """If in MOTION_MANUAL but sensor off, reconcile to MANUAL."""
-        harness = await CoordinatorHarness.create(hass)
-        await harness.motion_on()
-        await harness.manual_light_on(brightness=100)
-        harness.assert_state(STATE_MOTION_MANUAL)
-
-        # Simulate missed event: sensor off but state still MOTION_MANUAL
-        hass.states.async_set("binary_sensor.motion", "off")
-        harness.force_state(STATE_MOTION_MANUAL)
-
-        # Need lights to be on for MANUAL state to make sense
-        hass.states.async_set("light.ceiling", "on", attributes={"brightness": 100})
-
-        await harness.coordinator._async_reconcile_state()
-
-        # Should correct to MANUAL (motion_off from MOTION_MANUAL → MANUAL)
-        harness.assert_state(STATE_MANUAL)
         await harness.cleanup()
 
     async def test_reconciliation_scheduled_on_setup(self, hass: HomeAssistant) -> None:

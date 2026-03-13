@@ -702,7 +702,7 @@ class TestErrorRecovery:
         1. MOTION_AUTO
         2. Somehow lights got turned off (missed KNX event)
         3. Reconciliation fires -> detects all lights off
-        4. Transitions to IDLE
+        4. Transitions to IDLE directly (lights-off drift)
         """
         h = await CoordinatorHarness.create(hass)
         try:
@@ -711,22 +711,13 @@ class TestErrorRecovery:
             h.assert_state(STATE_MOTION_AUTO)
 
             # 2. Lights off without going through normal handler (missed event)
-            #    Also set motion sensor off (so reconciliation drift #1 fires first)
-            hass.states.async_set("binary_sensor.motion", "off")
             hass.states.async_set("light.ceiling", "off")
             h.force_state(STATE_MOTION_AUTO)
 
-            # 3. Reconciliation fires -> detects motion sensor off
+            # 3. Reconciliation fires -> detects all lights off in MOTION_AUTO
             await h.coordinator._async_reconcile_state()
 
-            # 4. Should have corrected: MOTION_AUTO + motion off -> AUTO
-            #    Then reconciliation may run drift #2 on next call
-            h.assert_state(STATE_AUTO)
-
-            # Force back to a lights-on state to test drift #2
-            h.force_state(STATE_AUTO)
-            await h.coordinator._async_reconcile_state()
-            # Drift 2: AUTO but all lights off -> IDLE
+            # 4. Lights-off drift: MOTION_AUTO + lights off -> IDLE
             h.assert_state(STATE_IDLE)
         finally:
             await h.cleanup()

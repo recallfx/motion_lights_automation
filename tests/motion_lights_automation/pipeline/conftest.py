@@ -6,6 +6,7 @@ with convenient methods for simulating HA events and asserting state.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
@@ -212,10 +213,9 @@ class CoordinatorHarness:
         self.hass.states.async_set(entity_id, "off")
         await self.hass.async_block_till_done()
 
-    async def manual_light_on(
-        self, entity_id: str = "light.ceiling", brightness: int = 200
-    ) -> None:
-        """Simulate user manually turning on a light."""
+    @contextmanager
+    def _simulate_external_change(self):
+        """Patch light controller to treat state changes as external (non-integration)."""
         with (
             patch.object(
                 self.coordinator.light_controller,
@@ -228,6 +228,13 @@ class CoordinatorHarness:
                 return_value=False,
             ),
         ):
+            yield
+
+    async def manual_light_on(
+        self, entity_id: str = "light.ceiling", brightness: int = 200
+    ) -> None:
+        """Simulate user manually turning on a light."""
+        with self._simulate_external_change():
             self.hass.states.async_set(
                 entity_id, "on", attributes={"brightness": brightness}
             )
@@ -235,18 +242,7 @@ class CoordinatorHarness:
 
     async def manual_light_off(self, entity_id: str = "light.ceiling") -> None:
         """Simulate user manually turning off a light."""
-        with (
-            patch.object(
-                self.coordinator.light_controller,
-                "is_integration_context",
-                return_value=False,
-            ),
-            patch.object(
-                self.coordinator.light_controller,
-                "is_expected_state_change",
-                return_value=False,
-            ),
-        ):
+        with self._simulate_external_change():
             self.hass.states.async_set(entity_id, "off")
             await self.hass.async_block_till_done()
 
@@ -254,18 +250,7 @@ class CoordinatorHarness:
         self, entity_id: str = "light.ceiling", brightness: int = 100
     ) -> None:
         """Simulate user changing brightness on an already-on light."""
-        with (
-            patch.object(
-                self.coordinator.light_controller,
-                "is_integration_context",
-                return_value=False,
-            ),
-            patch.object(
-                self.coordinator.light_controller,
-                "is_expected_state_change",
-                return_value=False,
-            ),
-        ):
+        with self._simulate_external_change():
             self.hass.states.async_set(
                 entity_id, "on", attributes={"brightness": brightness}
             )

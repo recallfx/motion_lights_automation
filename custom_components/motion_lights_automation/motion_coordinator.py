@@ -1214,15 +1214,8 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not motion_trigger:
             return
 
-        # Re-read actual sensor states from HA
-        any_active = False
-        for entity_id in self.motion_entities:
-            state = self.hass.states.get(entity_id)
-            if state and state.state == "on":
-                any_active = True
-                break
-
-        if any_active:
+        # Re-read actual sensor states from HA via the trigger
+        if motion_trigger.is_active():
             _LOGGER.debug(
                 "Motion watchdog: sensor still active after %ds — restarting watchdog",
                 self._motion_watchdog_seconds,
@@ -1242,29 +1235,22 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ========================================================================
 
     def _schedule_reconciliation(self) -> None:
-        """Schedule periodic state reconciliation.
-
-        Every 5 minutes, verify that the state machine matches actual
-        light and motion sensor states. Corrects drift from missed KNX events.
-        """
-
-        def _reconciliation_tick() -> None:
-            self.hass.async_create_task(self._async_reconcile_state())
-            self._reconciliation_handle = self.hass.loop.call_later(
-                self._reconciliation_interval, _reconciliation_tick
-            )
-
-        self._reconciliation_handle = self.hass.loop.call_later(
-            self._reconciliation_interval, _reconciliation_tick
+        """Schedule periodic state reconciliation (every 5 minutes)."""
+        self._schedule_periodic_task(
+            self._reconciliation_interval,
+            self._async_reconcile_state,
+            "_reconciliation_handle",
         )
 
     async def _async_reconcile_state(self) -> None:
         """Check actual device states against state machine and correct drift.
 
-        Detects three types of drift:
-        1. Motion sensor shows off but state machine is in MOTION state (stuck sensor)
-        2. All lights are off but state machine thinks they're on
-        3. Lights are on but state machine is in IDLE
+        Detects two types of drift:
+        1. All lights are off but state machine thinks they're on
+        2. Lights are on but state machine is in IDLE
+
+        Note: Stuck motion sensors (MOTION state but sensor off) are handled
+        by the dedicated motion watchdog, not reconciliation.
         """
         try:
             current = self.state_machine.current_state
@@ -1277,31 +1263,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.light_controller.refresh_all_states()
             lights_on = self.light_controller.any_lights_on()
 
-            # Check motion sensor actual state
-            motion_trigger = self.trigger_manager.get_trigger("motion")
-            motion_actually_active = False
-            if motion_trigger:
-                for entity_id in self.motion_entities:
-                    state = self.hass.states.get(entity_id)
-                    if state and state.state == "on":
-                        motion_actually_active = True
-                        break
-
-            # Drift 1: In MOTION state but sensor shows off
-            if current in (STATE_MOTION_AUTO, STATE_MOTION_MANUAL):
-                if not motion_actually_active:
-                    _LOGGER.warning(
-                        "Reconciliation: state is %s but motion sensor shows off — "
-                        "triggering motion_off",
-                        current,
-                    )
-                    self._log_human_event(
-                        "Reconciliation: corrected stale motion state"
-                    )
-                    self._handle_motion_off()
-                    return
-
-            # Drift 2: State machine thinks lights are on, but they're all off
+            # Drift 1: State machine thinks lights are on, but they're all off
             if current in (
                 STATE_AUTO,
                 STATE_MOTION_AUTO,
@@ -1320,7 +1282,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._update_data()
                     return
 
-            # Drift 3: State machine is IDLE but lights are actually on
+            # Drift 2: State machine is IDLE but lights are actually on
             if current == STATE_IDLE and lights_on:
                 _LOGGER.warning(
                     "Reconciliation: state is IDLE but lights are on — "
@@ -1332,10 +1294,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return
 
             _LOGGER.debug(
-                "Reconciliation: state %s consistent (lights_on=%s, motion=%s)",
+                "Reconciliation: state %s consistent (lights_on=%s)",
                 current,
                 lights_on,
-                motion_actually_active,
             )
         except Exception:
             _LOGGER.exception("Error during state reconciliation")
@@ -1455,21 +1416,42 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Cleanup
     # ========================================================================
 
-    def _schedule_periodic_cleanup(self) -> None:
-        """Schedule periodic cleanup of old context IDs.
+    def _schedule_periodic_task(
+        self, interval: int, callback, handle_attr: str
+    ) -> None:
+        """Schedule a recurring task on the event loop.
 
-        This runs every hour to prevent unbounded memory growth from context tracking.
+        Args:
+            interval: Seconds between ticks
+            callback: Async callable to run each tick
+            handle_attr: Attribute name to store the timer handle
         """
+        # Cancel existing handle if any
+        existing = getattr(self, handle_attr, None)
+        if existing is not None:
+            existing.cancel()
 
-        def cleanup_task() -> None:
-            """Perform cleanup and reschedule."""
+        def tick() -> None:
+            self.hass.async_create_task(callback())
+            setattr(self, handle_attr, self.hass.loop.call_later(interval, tick))
+
+        setattr(self, handle_attr, self.hass.loop.call_later(interval, tick))
+
+    def _cancel_periodic_task(self, handle_attr: str) -> None:
+        """Cancel a periodic task by handle attribute name."""
+        handle = getattr(self, handle_attr, None)
+        if handle is not None:
+            handle.cancel()
+            setattr(self, handle_attr, None)
+
+    def _schedule_periodic_cleanup(self) -> None:
+        """Schedule periodic cleanup of old context IDs (every hour)."""
+
+        async def _cleanup() -> None:
             _LOGGER.debug("Performing periodic context cleanup")
             self.light_controller.cleanup_old_contexts()
-            # Reschedule for next hour
-            self._cleanup_handle = self.hass.loop.call_later(3600, cleanup_task)
 
-        # Schedule first cleanup in 1 hour
-        self._cleanup_handle = self.hass.loop.call_later(3600, cleanup_task)
+        self._schedule_periodic_task(3600, _cleanup, "_cleanup_handle")
 
     async def async_refresh_light_tracking(self) -> None:
         """Refresh light state tracking (called by service)."""
@@ -1479,17 +1461,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def async_cleanup_listeners(self) -> None:
         """Clean up listeners."""
-        # Cancel periodic cleanup task
-        if self._cleanup_handle is not None:
-            self._cleanup_handle.cancel()
-            self._cleanup_handle = None
-
-        # Cancel reconciliation task
-        if self._reconciliation_handle is not None:
-            self._reconciliation_handle.cancel()
-            self._reconciliation_handle = None
-
-        # Cancel motion watchdog
+        # Cancel periodic tasks and watchdog
+        self._cancel_periodic_task("_cleanup_handle")
+        self._cancel_periodic_task("_reconciliation_handle")
         self._cancel_motion_watchdog()
 
         # Cancel all timers
