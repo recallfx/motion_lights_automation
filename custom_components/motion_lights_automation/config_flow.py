@@ -92,42 +92,39 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
         selector.EntitySelectorConfig(domain="light", multiple=True)
     )
 
-    # Only add defaults for optional single-entity selectors if they have values.
-    # Home Assistant's UI still lets users clear optional fields.
+    # Use suggested_value instead of default for optional entity selectors.
+    # default= causes voluptuous to fill in the old value when the field is
+    # omitted, which prevents users from clearing these fields during reconfigure.
+    # suggested_value pre-populates the UI without forcing a value.
+    override_key = vol.Optional(CONF_OVERRIDE_SWITCH)
     if data and data.get(CONF_OVERRIDE_SWITCH):
-        schema_dict[
-            vol.Optional(CONF_OVERRIDE_SWITCH, default=data.get(CONF_OVERRIDE_SWITCH))
-        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
-    else:
-        schema_dict[vol.Optional(CONF_OVERRIDE_SWITCH)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="switch")
+        override_key = vol.Optional(
+            CONF_OVERRIDE_SWITCH,
+            description={"suggested_value": data.get(CONF_OVERRIDE_SWITCH)},
         )
+    schema_dict[override_key] = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="switch")
+    )
 
+    ambient_key = vol.Optional(CONF_AMBIENT_LIGHT_SENSOR)
     if data and data.get(CONF_AMBIENT_LIGHT_SENSOR):
-        schema_dict[
-            vol.Optional(
-                CONF_AMBIENT_LIGHT_SENSOR, default=data.get(CONF_AMBIENT_LIGHT_SENSOR)
-            )
-        ] = selector.EntitySelector(selector.EntitySelectorConfig())
-    else:
-        schema_dict[vol.Optional(CONF_AMBIENT_LIGHT_SENSOR)] = selector.EntitySelector(
-            selector.EntitySelectorConfig()
+        ambient_key = vol.Optional(
+            CONF_AMBIENT_LIGHT_SENSOR,
+            description={"suggested_value": data.get(CONF_AMBIENT_LIGHT_SENSOR)},
         )
+    schema_dict[ambient_key] = selector.EntitySelector(selector.EntitySelectorConfig())
 
+    house_key = vol.Optional(CONF_HOUSE_ACTIVE)
     if data and data.get(CONF_HOUSE_ACTIVE):
-        schema_dict[
-            vol.Optional(CONF_HOUSE_ACTIVE, default=data.get(CONF_HOUSE_ACTIVE))
-        ] = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                domain=["input_boolean", "switch", "binary_sensor"]
-            )
+        house_key = vol.Optional(
+            CONF_HOUSE_ACTIVE,
+            description={"suggested_value": data.get(CONF_HOUSE_ACTIVE)},
         )
-    else:
-        schema_dict[vol.Optional(CONF_HOUSE_ACTIVE)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                domain=["input_boolean", "switch", "binary_sensor"]
-            )
+    schema_dict[house_key] = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=["input_boolean", "switch", "binary_sensor"]
         )
+    )
 
     return vol.Schema(schema_dict)
 

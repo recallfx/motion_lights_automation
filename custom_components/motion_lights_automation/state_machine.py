@@ -307,7 +307,10 @@ class MotionLightsStateMachine:
         # Call exit callbacks for old state
         for callback in self._state_exit_callbacks.get(old_state, []):
             try:
-                callback()
+                try:
+                    callback(old_state, new_state, transition.event)
+                except TypeError:
+                    callback()
             except Exception as err:
                 _LOGGER.error("Error in state exit callback: %s", err)
 
@@ -319,7 +322,10 @@ class MotionLightsStateMachine:
         # Call entry callbacks for new state
         for callback in self._state_entry_callbacks.get(new_state, []):
             try:
-                callback()
+                try:
+                    callback(old_state, new_state, transition.event)
+                except TypeError:
+                    callback()
             except Exception as err:
                 _LOGGER.error("Error in state entry callback: %s", err)
 

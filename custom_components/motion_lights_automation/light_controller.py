@@ -10,11 +10,25 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+# How long a pending command is considered valid for matching late confirmations
+PENDING_COMMAND_TTL_SECONDS = 30
+
+
+@dataclass
+class PendingCommand:
+    """A light command awaiting KNX confirmation."""
+
+    target_state: str
+    commanded_at: datetime
+    context_id: str
 
 
 @dataclass
@@ -135,6 +149,9 @@ class LightController:
         # Track light states
         self._light_states: dict[str, LightState] = {}
         self._context_tracking: set[str] = set()
+
+        # Track pending commands for matching late KNX confirmations
+        self._pending_commands: dict[str, PendingCommand] = {}
 
     def set_brightness_strategy(self, strategy: BrightnessStrategy) -> None:
         """Set the brightness selection strategy."""
@@ -271,6 +288,13 @@ class LightController:
             ctx = Context()
             self._context_tracking.add(ctx.id)
 
+            # Record pending command BEFORE sending (catches late confirmations)
+            self._pending_commands[entity_id] = PendingCommand(
+                target_state=state,
+                commanded_at=dt_util.now(),
+                context_id=ctx.id,
+            )
+
             # Call light service with 10-second timeout
             try:
                 await asyncio.wait_for(
@@ -284,10 +308,12 @@ class LightController:
                 )
             except asyncio.TimeoutError:
                 _LOGGER.warning(
-                    "Light service call timed out for %s (turn_%s)",
+                    "Light service call timed out for %s (turn_%s) — "
+                    "pending command kept for late KNX confirmation",
                     entity_id,
                     state,
                 )
+                # Don't remove pending command — KNX may still confirm later
                 return False
 
             _LOGGER.debug(
@@ -310,15 +336,60 @@ class LightController:
             context.parent_id and context.parent_id in self._context_tracking
         )
 
+    def is_expected_state_change(self, entity_id: str, new_state_str: str) -> bool:
+        """Check if a state change matches a recent pending command.
+
+        This catches late KNX confirmations where the context doesn't match
+        because the KNX integration creates its own context for the state update.
+
+        Args:
+            entity_id: The light entity ID
+            new_state_str: The new state ("on" or "off")
+
+        Returns:
+            True if we recently commanded this light to this state
+        """
+        pending = self._pending_commands.get(entity_id)
+        if not pending:
+            return False
+
+        # Check if the pending command matches and is still within TTL
+        age = (dt_util.now() - pending.commanded_at).total_seconds()
+        if age > PENDING_COMMAND_TTL_SECONDS:
+            # Command is too old, remove it
+            del self._pending_commands[entity_id]
+            return False
+
+        if pending.target_state == new_state_str:
+            _LOGGER.debug(
+                "State change for %s matches pending command (age: %.1fs) — "
+                "treating as integration-controlled",
+                entity_id,
+                age,
+            )
+            # Command fulfilled, remove it
+            del self._pending_commands[entity_id]
+            return True
+
+        return False
+
     def cleanup_old_contexts(self, max_age_seconds: int = 30) -> None:
-        """Remove old context IDs to prevent memory growth."""
-        # In a real implementation, you'd track timestamps
-        # For simplicity, we'll just limit the size
+        """Remove old context IDs and expired pending commands."""
+        # Clean up context tracking
         if len(self._context_tracking) > 100:
-            # Remove oldest half
             old_contexts = list(self._context_tracking)[:50]
             for ctx_id in old_contexts:
                 self._context_tracking.discard(ctx_id)
+
+        # Clean up expired pending commands
+        now = dt_util.now()
+        expired = [
+            eid
+            for eid, cmd in self._pending_commands.items()
+            if (now - cmd.commanded_at).total_seconds() > PENDING_COMMAND_TTL_SECONDS
+        ]
+        for eid in expired:
+            del self._pending_commands[eid]
 
     def get_info(self) -> dict[str, Any]:
         """Get diagnostic information."""
