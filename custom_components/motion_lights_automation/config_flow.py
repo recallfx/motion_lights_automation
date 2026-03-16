@@ -78,7 +78,7 @@ def get_user_schema(data: dict[str, Any] | None = None) -> vol.Schema:
     ] = selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain="binary_sensor",
-            device_class="motion",
+            device_class=["motion", "occupancy"],
             multiple=True,
         )
     )
