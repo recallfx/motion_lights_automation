@@ -91,13 +91,12 @@ class TestLuxHysteresis:
     ) -> None:
         """Start at 100 lux (bright), decrease to 29 -> becomes dark."""
         # Initial lux is 100 (bright). Turn motion on so trigger reports active.
-        # motion_on() transitions IDLE -> MOTION_AUTO, which initializes
-        # hysteresis via _get_context() call inside _async_turn_on_lights().
+        # motion_on() initializes hysteresis via _get_context(), then returns
+        # to IDLE because brightness is 0 while bright.
         await ambient_harness.motion_on()
-        ambient_harness.assert_state(STATE_MOTION_AUTO)
+        ambient_harness.assert_state(STATE_IDLE)
 
-        # Force back to IDLE. Motion sensor stays "on" so trigger.is_active()=True.
-        ambient_harness.force_state(STATE_IDLE)
+        # Motion sensor stays "on" so trigger.is_active()=True.
 
         # Lux drops to 29 -> below low_threshold (30), should become dark.
         # Ambient handler: old_is_dark=False (100 lux), is_dark_now=True (29 lux).
@@ -831,10 +830,10 @@ class TestAmbientEdgeCases:
         try:
             h.assert_state(STATE_IDLE)
 
-            # Motion triggers MOTION_AUTO state transition, but brightness
-            # strategy returns 0 because is_dark_inside=False
+            # Motion initializes bright mode, but brightness strategy returns 0
+            # because is_dark_inside=False, so state returns to IDLE.
             await h.motion_on()
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_IDLE)
 
             # Verify context reports bright
             context = h.coordinator._get_context()

@@ -602,10 +602,9 @@ class TestHouseActiveNoChange:
         """
         h = await _create_house_harness(hass, initial_house_active="on")
         try:
-            # Get into MOTION_AUTO but with lights still off
-            await h.motion_on()
+            # Force MOTION_AUTO with lights still off.
+            h.force_state(STATE_MOTION_AUTO)
             h.assert_state(STATE_MOTION_AUTO)
-            # Lights are off (no light_on call)
             h.assert_lights_off()
 
             spy, called = _make_turn_on_spy(h)

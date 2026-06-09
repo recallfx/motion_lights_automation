@@ -8,10 +8,17 @@ Covers:
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 
+from custom_components.motion_lights_automation.const import (
+    CONF_AMBIENT_LIGHT_SENSOR,
+    CONF_AMBIENT_LIGHT_THRESHOLD,
+    CONF_BRIGHTNESS_INACTIVE,
+    CONF_HOUSE_ACTIVE,
+)
 from custom_components.motion_lights_automation.light_controller import PendingCommand
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
@@ -39,8 +46,8 @@ class TestPendingCommandTracking:
         be treated as manual intervention."""
         harness = await CoordinatorHarness.create(hass)
 
-        # Motion on → MOTION_AUTO → lights turn on
-        await harness.motion_on()
+        # Simulate MOTION_AUTO while KNX confirmation is still pending.
+        harness.force_state(STATE_MOTION_AUTO)
         harness.assert_state(STATE_MOTION_AUTO)
 
         # Simulate: our integration commanded the light on (pending command recorded),
@@ -258,6 +265,46 @@ class TestMotionWatchdog:
 class TestReconciliation:
     """Test periodic state reconciliation catches drift from missed events."""
 
+    async def test_motion_auto_returns_to_idle_when_too_bright(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Bright ambient light should not leave the room stuck in MOTION_AUTO."""
+        harness = await CoordinatorHarness.create(
+            hass,
+            config_data={
+                CONF_AMBIENT_LIGHT_SENSOR: "sensor.lux",
+                CONF_AMBIENT_LIGHT_THRESHOLD: 50,
+            },
+            initial_ambient="100",
+        )
+
+        await harness.motion_on()
+
+        harness.assert_state(STATE_IDLE)
+        harness.assert_lights_off()
+        harness.assert_event_log_contains("too bright")
+        await harness.cleanup()
+
+    async def test_motion_auto_returns_to_idle_when_inactive_brightness_zero(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Inactive brightness 0 should not leave MOTION_AUTO with no lights on."""
+        harness = await CoordinatorHarness.create(
+            hass,
+            config_data={
+                CONF_HOUSE_ACTIVE: "input_boolean.house_active",
+                CONF_BRIGHTNESS_INACTIVE: 0,
+            },
+            initial_house_active="off",
+        )
+
+        await harness.motion_on()
+
+        harness.assert_state(STATE_IDLE)
+        harness.assert_lights_off()
+        harness.assert_event_log_contains("inactive brightness 0%")
+        await harness.cleanup()
+
     async def test_reconciliation_lights_on_state_but_actually_off(
         self, hass: HomeAssistant
     ) -> None:
@@ -272,6 +319,25 @@ class TestReconciliation:
 
         harness.assert_state(STATE_IDLE)
         harness.assert_event_log_contains("Reconciliation")
+        await harness.cleanup()
+
+    async def test_reconciliation_warning_includes_entry_title(
+        self, hass: HomeAssistant, caplog
+    ) -> None:
+        """Reconciliation warnings should identify the configured room."""
+        harness = await CoordinatorHarness.create(hass)
+
+        harness.force_state(STATE_AUTO)
+        hass.states.async_set("light.ceiling", "off")
+
+        with caplog.at_level(logging.WARNING):
+            await harness.coordinator._async_reconcile_state()
+
+        assert any(
+            "Reconciliation for Pipeline Test" in record.message
+            and "all lights are off" in record.message
+            for record in caplog.records
+        )
         await harness.cleanup()
 
     async def test_reconciliation_idle_but_lights_on(self, hass: HomeAssistant) -> None:

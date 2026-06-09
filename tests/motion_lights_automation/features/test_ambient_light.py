@@ -171,8 +171,8 @@ class TestBinarySensorBehavior:
             hass.states.async_set("binary_sensor.motion", "on")
             await hass.async_block_till_done()
 
-            # State transitions but brightness is 0
-            assert coordinator.current_state == STATE_MOTION_AUTO
+            # Brightness is 0, so motion returns to standby with lights off.
+            assert coordinator.current_state == STATE_IDLE
             context = coordinator._get_context()
             brightness = (
                 coordinator.light_controller._brightness_strategy.get_brightness(
