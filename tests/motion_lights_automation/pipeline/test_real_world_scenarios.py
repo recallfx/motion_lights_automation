@@ -250,7 +250,7 @@ class TestDaylightTransitions:
         3. Lux rises within hysteresis band (stays dark)
         4. Lux crosses high threshold from a value <= low threshold ->
            lights turn off -> IDLE
-        5. More motion -> MOTION_AUTO but brightness=0 (too bright)
+        5. More motion -> IDLE because brightness=0 (too bright)
 
         The ambient handler requires old_lux <= low_threshold (30) for
         dark-to-bright transitions to be detected, due to the shared
@@ -297,11 +297,11 @@ class TestDaylightTransitions:
             assert called["value"], "Expected lights to turn off when bright"
             h.assert_state(STATE_IDLE)
 
-            # 5. New motion cycle -> MOTION_AUTO but brightness=0 (too bright)
+            # 5. New motion cycle -> IDLE because brightness=0 (too bright)
             #    Must clear motion first since sensor is still "on" from before
             await h.motion_off()
             await h.motion_on()
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_IDLE)
 
             # Verify context says it's bright
             context = h.coordinator._get_context()
@@ -313,7 +313,7 @@ class TestDaylightTransitions:
         """Simulate evening darkening triggering lights.
 
         1. IDLE, bright (lux=100), house active
-        2. Motion detected -> MOTION_AUTO but brightness=0 (too bright)
+        2. Motion detected -> IDLE because brightness=0 (too bright)
         3. Lux drops within hysteresis band (stays bright)
         4. Lux crosses low threshold from a value >= high threshold ->
            dark + motion -> MOTION_AUTO
@@ -333,11 +333,11 @@ class TestDaylightTransitions:
             # 1. Start: IDLE, bright
             h.assert_state(STATE_IDLE)
 
-            # 2. Motion detected -> MOTION_AUTO (initializes hysteresis as BRIGHT)
+            # 2. Motion detected initializes hysteresis as BRIGHT, then returns to IDLE.
             await h.motion_on()
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_IDLE)
 
-            # Force back to IDLE, keep motion sensor on
+            # Keep motion sensor on while staying IDLE.
             h.force_state(STATE_IDLE)
 
             # 3. Lux within hysteresis band (still bright, > 30)
@@ -375,11 +375,12 @@ class TestDaylightTransitions:
             initial_ambient="80",
         )
         try:
-            # Initialize hysteresis (BRIGHT mode via motion_on at 80 lux)
+            # Initialize hysteresis (BRIGHT mode via motion_on at 80 lux).
+            # Brightness is 0, so the coordinator returns to IDLE.
             await h.motion_on()
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_IDLE)
 
-            # Force back to IDLE, keep motion sensor on
+            # Keep motion sensor on while staying IDLE.
             h.force_state(STATE_IDLE)
 
             # 2. Clouds: lux drops to 29 -> crosses low threshold (30) -> dark

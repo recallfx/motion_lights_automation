@@ -146,7 +146,7 @@ class TestFix1_EntryCallbacksReceiveFromState:
     ) -> None:
         """After fix: AUTO -> IDLE should log 'Lights turned off (timeout)'."""
         hass.states.async_set("binary_sensor.motion", "off")
-        hass.states.async_set("light.ceiling", "off")
+        hass.states.async_set("light.ceiling", "on", {"brightness": 200})
 
         coordinator = MotionLightsCoordinator(hass, basic_entry)
         await coordinator.async_setup_listeners()

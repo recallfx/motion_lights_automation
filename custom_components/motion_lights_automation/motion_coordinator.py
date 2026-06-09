@@ -200,6 +200,15 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Lights
         self._lights = _as_list(data.get(CONF_LIGHTS))
 
+    @property
+    def _entry_log_name(self) -> str:
+        """Return a useful name for room-specific log messages."""
+        return str(
+            self.config_entry.title
+            or self.config_entry.data.get("name")
+            or self.config_entry.entry_id
+        )
+
     async def async_setup_listeners(self) -> None:
         """Set up the coordinator - wire modules together."""
         import time
@@ -968,9 +977,12 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Entering IDLE - turn off lights, cancel watchdog."""
         _LOGGER.debug("Entering IDLE state (from %s) - turning off lights", from_state)
         self._cancel_motion_watchdog()
-        if from_state == STATE_AUTO or from_state == STATE_MOTION_AUTO:
+        lights_on = self.light_controller.any_lights_on(refresh=True)
+        if lights_on and (from_state == STATE_AUTO or from_state == STATE_MOTION_AUTO):
             self._log_human_event("Lights turned off (timeout)")
-        elif from_state == STATE_MANUAL or from_state == STATE_MOTION_MANUAL:
+        elif lights_on and (
+            from_state == STATE_MANUAL or from_state == STATE_MOTION_MANUAL
+        ):
             self._log_human_event("Lights turned off (extended timeout)")
         elif from_state == STATE_MANUAL_OFF:
             self._log_human_event("Ready - waiting for motion")
@@ -1032,7 +1044,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         context = self._get_context()
         lights_were_on = self.light_controller.any_lights_on(refresh=True)
 
-        await self.light_controller.turn_on_auto_lights(context)
+        turned_on = await self.light_controller.turn_on_auto_lights(context)
 
         lights_are_on = self.light_controller.any_lights_on(refresh=True)
 
@@ -1054,6 +1066,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._log_human_event(
                     f"Motion detected (inactive brightness {self.brightness_inactive}% - lights stayed off)"
                 )
+
+            current = self.state_machine.current_state
+            if not turned_on and current in (STATE_AUTO, STATE_MOTION_AUTO):
+                _LOGGER.info(
+                    "Automatic activation for %s left all lights off in %s - returning to standby",
+                    self._entry_log_name,
+                    current,
+                )
+                self.timer_manager.cancel_all_timers()
+                self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
 
         self._update_data()
 
@@ -1272,8 +1294,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ):
                 if not lights_on:
                     _LOGGER.warning(
-                        "Reconciliation: state is %s but all lights are off — "
+                        "Reconciliation for %s: state is %s but all lights are off - "
                         "transitioning to IDLE",
+                        self._entry_log_name,
                         current,
                     )
                     self._log_human_event("Reconciliation: lights found off, resetting")
@@ -1285,8 +1308,9 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Drift 2: State machine is IDLE but lights are actually on
             if current == STATE_IDLE and lights_on:
                 _LOGGER.warning(
-                    "Reconciliation: state is IDLE but lights are on — "
-                    "transitioning to MANUAL"
+                    "Reconciliation for %s: state is IDLE but lights are on - "
+                    "transitioning to MANUAL",
+                    self._entry_log_name,
                 )
                 self._log_human_event("Reconciliation: lights found on, tracking")
                 self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)

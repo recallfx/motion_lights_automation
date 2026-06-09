@@ -263,8 +263,8 @@ class TestAmbientWithMotionDelay:
             # Delay expires - motion still active but ambient is bright
             await h.expire_motion_delay()
 
-            # State transitions to MOTION_AUTO but brightness=0 means lights don't turn on
-            h.assert_state(STATE_MOTION_AUTO)
+            # Brightness=0 means lights don't turn on, so it returns to IDLE.
+            h.assert_state(STATE_IDLE)
             # Brightness strategy returns 0 when bright, so lights stay off
             context = h.coordinator._get_context()
             assert context["is_dark_inside"] is False
