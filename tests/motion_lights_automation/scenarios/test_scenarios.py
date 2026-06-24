@@ -25,7 +25,6 @@ from custom_components.motion_lights_automation.const import (
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
-    STATE_MANUAL,
     STATE_MANUAL_OFF,
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
@@ -106,8 +105,19 @@ class TestManualOffScenarios:
                 "Lights should stay off when user turns them off during motion."
             )
 
-            # Verify extended timer is active
-            assert coordinator.timer_manager.has_active_timer("extended")
+            # While motion is active, there is no reset timer. Motion clearing
+            # is the reset signal.
+            assert not coordinator.timer_manager.has_active_timer("extended")
+
+            # Leaving the room re-arms automation immediately.
+            hass.states.async_set("binary_sensor.motion", "off")
+            await hass.async_block_till_done()
+            assert coordinator.current_state == STATE_IDLE
+
+            # Coming back triggers the usual motion flow.
+            hass.states.async_set("binary_sensor.motion", "on")
+            await hass.async_block_till_done()
+            assert coordinator.current_state == STATE_MOTION_AUTO
 
         finally:
             coordinator.async_cleanup_listeners()
@@ -305,10 +315,10 @@ class TestManualBrightnessScenarios:
         finally:
             coordinator.async_cleanup_listeners()
 
-    async def test_motion_off_after_manual_adjustment_starts_extended_timer(
+    async def test_motion_off_after_manual_adjustment_rearms_automation(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
-        """Test that extended timer starts when motion stops after manual adjustment."""
+        """Test that motion clearing after manual adjustment returns to IDLE."""
         # Set up entities
         hass.states.async_set("binary_sensor.motion", "on")
         hass.states.async_set("light.ceiling", "on", attributes={"brightness": 200})
@@ -328,9 +338,8 @@ class TestManualBrightnessScenarios:
             hass.states.async_set("binary_sensor.motion", "off")
             await hass.async_block_till_done()
 
-            # Should be in MANUAL with extended timer
-            assert coordinator.current_state == STATE_MANUAL
-            assert coordinator.timer_manager.has_active_timer("extended")
+            assert coordinator.current_state == STATE_IDLE
+            assert not coordinator.timer_manager.has_active_timer("extended")
 
         finally:
             coordinator.async_cleanup_listeners()

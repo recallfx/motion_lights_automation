@@ -489,9 +489,7 @@ class TestAllFeaturesSimultaneous:
         3. Motion detected -> delay timer starts
         4. Delay expires -> MOTION_AUTO (lights on at active brightness)
         5. User adjusts brightness -> MOTION_MANUAL
-        6. Motion clears -> MANUAL (extended timer)
-        7. House goes inactive (brightness stays)
-        8. Timer expires -> IDLE
+        6. Motion clears -> IDLE
         """
         h = await _create_full_harness(
             hass,
@@ -523,18 +521,8 @@ class TestAllFeaturesSimultaneous:
             await h.manual_brightness_change("light.ceiling", brightness=150)
             h.assert_state(STATE_MOTION_MANUAL)
 
-            # Step 6: Motion clears -> MANUAL with extended timer
+            # Step 6: Motion clears -> automation is ready again
             await h.motion_off("binary_sensor.motion1")
-            h.assert_state(STATE_MANUAL)
-            h.assert_timer_active("extended")
-
-            # Step 7: House goes inactive - brightness stays (no forced change)
-            await h.set_house_active(False)
-            # State doesn't change, brightness stays at user-set level
-            h.assert_state(STATE_MANUAL)
-
-            # Step 8: Timer expires -> IDLE
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
         finally:
             await h.cleanup()

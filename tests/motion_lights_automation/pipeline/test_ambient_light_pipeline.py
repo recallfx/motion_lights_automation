@@ -321,10 +321,10 @@ class TestBecameDarkWithMotion:
         assert turn_on_called, "Expected _async_turn_on_lights to be called"
         ambient_harness.assert_state(STATE_AUTO)
 
-    async def test_dark_in_motion_manual_turns_on_lights(
+    async def test_dark_in_motion_manual_keeps_manual_brightness(
         self, hass: HomeAssistant, ambient_harness: CoordinatorHarness
     ) -> None:
-        """MOTION_MANUAL + became dark -> calls _async_turn_on_lights."""
+        """MOTION_MANUAL + became dark -> keeps manual brightness."""
         await ambient_harness.motion_on()
         ambient_harness.force_state(STATE_MOTION_MANUAL)
 
@@ -340,7 +340,7 @@ class TestBecameDarkWithMotion:
 
         await ambient_harness.set_ambient_lux(29)
 
-        assert turn_on_called, "Expected _async_turn_on_lights to be called"
+        assert not turn_on_called, "Expected manual brightness to be left alone"
         ambient_harness.assert_state(STATE_MOTION_MANUAL)
 
     async def test_dark_in_manual_turns_on_lights(

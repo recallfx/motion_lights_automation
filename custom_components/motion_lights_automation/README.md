@@ -92,19 +92,10 @@ The integration operates through a finite state machine with 7 distinct states. 
 └───────┬──────────┘
         │ motion stops
         ↓
-   ┌────────────────┐
-   │ MANUAL_TIMEOUT │ ← Manual mode, extended timer active
-   └───┬────────────┘
-       │ extended timer expires OR all lights manually off
-       ↓
-   ┌─────────────┐
-   │ MANUAL_OFF  │ ← User manually turned off lights
-   └──────┬──────┘
-          │ motion detected (if activation enabled)
-          ↓
-        ┌──────────────────┐
-        │ MOTION_DETECTED  │
-        └──────────────────┘
+     ┌─────────┐
+     │ STANDBY │
+     └─────────┘
+        └─────────┘
 
 ┌──────────┐
 │ DISABLED │ ← Override switch is ON (automation disabled)
@@ -123,11 +114,12 @@ The integration operates through a finite state machine with 7 distinct states. 
 | AUTO_TIMEOUT | Motion timer expires | STANDBY | Turn off lights |
 | AUTO_TIMEOUT | Motion detected again | MOTION_DETECTED | Cancel timer, keep lights on |
 | AUTO_TIMEOUT | Manual intervention | MANUAL_TIMEOUT | Switch to extended timer |
-| AUTO_TIMEOUT | All lights manually turned off | MANUAL_OFF | Switch to extended timer, block auto-on |
+| AUTO_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until motion clears or fallback timeout expires |
 | MANUAL_TIMEOUT | Extended timer expires | STANDBY | Turn off lights |
-| MANUAL_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until timer expires |
-| MANUAL_OFF | Extended timer expires | STANDBY | Re-enable automation |
-| MOTION_ADJUSTED | Motion stops | MANUAL_TIMEOUT | Start extended timer |
+| MANUAL_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until motion clears or fallback timeout expires |
+| MANUAL_OFF | Motion clears | STANDBY | Re-enable automation |
+| MANUAL_OFF | Extended timer expires | STANDBY | Re-enable automation when motion is already clear |
+| MOTION_ADJUSTED | Motion stops | STANDBY | Re-enable automation |
 | DISABLED | Override switch OFF | Evaluate current state | Transition to appropriate state |
 | ANY | Override switch ON | DISABLED | Cancel all timers, disable automation |
 
@@ -146,7 +138,7 @@ The integration operates through a finite state machine with 7 distinct states. 
 **Lights Stay As-Is:**
 - MOTION_ADJUSTED: Respects your manual settings
 - MANUAL_TIMEOUT: Respects your manual settings
-- MANUAL_OFF: Keeps lights off until timer expires
+- MANUAL_OFF: Keeps lights off until motion clears
 - DISABLED: No automation control
 
 ---
@@ -298,7 +290,6 @@ The integration uses two types of timers with different purposes.
 **When It Starts:**
 - Manual intervention detected during AUTO_TIMEOUT → MANUAL_TIMEOUT
 - User turns off lights during AUTO_TIMEOUT → MANUAL_OFF
-- Motion stops during MOTION_ADJUSTED → MANUAL_TIMEOUT
 
 **What It Does:**
 - Respects that you took manual control
@@ -307,10 +298,10 @@ The integration uses two types of timers with different purposes.
 
 **Configuration:** Set via "Extended Timeout" in advanced settings (0-7200 seconds)
 
-**Example:** You manually dim lights, extended timeout is 1200 seconds (20 minutes)
+**Example:** Motion has cleared, then you manually dim lights while AUTO_TIMEOUT is active
 1. Lights auto-on at 100% (MOTION_DETECTED)
-2. You manually dim to 30% → Extended timer starts (MANUAL_TIMEOUT)
-3. Motion stops → Timer continues running
+2. Motion stops → Motion timer starts (AUTO_TIMEOUT)
+3. You manually dim to 30% → Extended timer starts (MANUAL_TIMEOUT)
 4. After 20 minutes of no interaction → Lights turn off (STANDBY)
 
 ### Timer Behavior Comparison
@@ -318,7 +309,7 @@ The integration uses two types of timers with different purposes.
 | Timer | Duration | Starts When | Purpose | Reset By |
 |-------|----------|-------------|---------|----------|
 | Motion | 300s default | Motion stops | Wait before auto-off | New motion |
-| Extended | 1200s default | Manual intervention | Respect manual control | Not reset |
+| Extended | 1200s default | Manual intervention after motion clears | Respect manual control | Not reset |
 
 ---
 
@@ -391,7 +382,7 @@ The sensor's state shows the last human-readable event message (e.g., "Lights tu
 | `auto-timeout` | Motion ended, motion timer counting down | 5 minutes (default) |
 | `motion-adjusted` | Motion active, manual control detected | While motion continues |
 | `manual-timeout` | Manual control, extended timer counting | 20 minutes (default) |
-| `manual-off` | User turned off lights, blocking auto-on | 20 minutes (default) |
+| `manual-off` | User turned off lights, blocking auto-on | Until motion clears |
 | `disabled` | Override switch active, automation disabled | While override ON |
 
 ### Sensor Attributes
@@ -671,10 +662,11 @@ Events are logged to the sensor's `recent_events` and `event_log` attributes for
 **This is by design:** Once you manually control lights, the system respects your choice.
 
 **To reset:**
-1. Wait for extended timeout to expire (default 20 minutes)
-2. Or disable and re-enable motion activation
-3. Or toggle override switch
-4. Or reload the integration
+1. Leave the room so motion clears
+2. Wait for extended timeout to expire if motion was already clear (default 20 minutes)
+3. Or disable and re-enable motion activation
+4. Or toggle override switch
+5. Or reload the integration
 
 ### Integration Won't Load
 
