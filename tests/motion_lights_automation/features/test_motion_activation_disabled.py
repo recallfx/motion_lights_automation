@@ -215,25 +215,24 @@ async def test_motion_keeps_resetting_timer_preventing_shutoff(
         # State should still be MOTION_MANUAL and lights still on
         assert hass.states.get("light.background").state == "on"
 
-        # When motion clears, timer should start again
+        # When motion clears, automation is ready again
         hass.states.async_set("binary_sensor.motion", "off")
         await hass.async_block_till_done()
 
-        # Should be back in MANUAL state with timer running
-        assert coordinator.current_state == STATE_MANUAL
-        assert coordinator.timer_manager.has_active_timer("extended")
+        assert coordinator.current_state == STATE_IDLE
+        assert not coordinator.timer_manager.has_active_timer("extended")
     finally:
         # Clean up
         coordinator.async_cleanup_listeners()
 
 
-async def test_motion_activation_disabled_pauses_timer_in_manual_off_state(
+async def test_motion_activation_disabled_rearms_on_motion_clear_in_manual_off_state(
     hass: HomeAssistant,
 ) -> None:
-    """Test that motion pauses timer in MANUAL_OFF state when motion_activation is False.
+    """Test that motion clears MANUAL_OFF when motion_activation is False.
 
     When user turns off lights and stays in room (motion active), the extended timer
-    should be paused. Only when motion clears should the timer restart.
+    should be paused. When motion clears, automation should be ready again.
     """
     # Set up entities
     hass.states.async_set("binary_sensor.motion", "off")
@@ -280,13 +279,12 @@ async def test_motion_activation_disabled_pauses_timer_in_manual_off_state(
         assert coordinator.current_state == STATE_MANUAL_OFF
         assert not coordinator.timer_manager.has_active_timer("extended")
 
-        # Motion clears - timer should restart
+        # Motion clears - automation is ready again
         hass.states.async_set("binary_sensor.motion", "off")
         await hass.async_block_till_done()
 
-        # Timer should be active again
-        assert coordinator.current_state == STATE_MANUAL_OFF
-        assert coordinator.timer_manager.has_active_timer("extended")
+        assert coordinator.current_state == STATE_IDLE
+        assert not coordinator.timer_manager.has_active_timer("extended")
     finally:
         # Clean up
         coordinator.async_cleanup_listeners()

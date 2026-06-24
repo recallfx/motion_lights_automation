@@ -229,7 +229,7 @@ class TestMotionWatchdog:
     async def test_watchdog_fires_in_motion_manual_sensor_off(
         self, hass: HomeAssistant
     ) -> None:
-        """Watchdog in MOTION_MANUAL with sensor off triggers motion_off → MANUAL."""
+        """Watchdog in MOTION_MANUAL with sensor off triggers motion_off -> IDLE."""
         harness = await CoordinatorHarness.create(hass)
         await harness.motion_on()
         await harness.manual_light_on(brightness=100)
@@ -240,8 +240,7 @@ class TestMotionWatchdog:
 
         await harness.coordinator._async_motion_watchdog_fired()
 
-        # MOTION_MANUAL + motion_off → MANUAL
-        harness.assert_state(STATE_MANUAL)
+        harness.assert_state(STATE_IDLE)
         await harness.cleanup()
 
     async def test_watchdog_noop_if_not_in_motion_state(

@@ -72,8 +72,7 @@ class TestEveningRoutine:
         4. Motion clears -> AUTO (timer starts)
         5. Motion detected again -> MOTION_AUTO (timer cancelled)
         6. User adjusts brightness -> MOTION_MANUAL
-        7. Motion clears -> MANUAL (extended timer)
-        8. Extended timer expires -> IDLE
+        7. Motion clears -> IDLE
         """
         h = await CoordinatorHarness.create(
             hass,
@@ -116,13 +115,8 @@ class TestEveningRoutine:
             await h.manual_brightness_change("light.ceiling", brightness=150)
             h.assert_state(STATE_MOTION_MANUAL)
 
-            # 7. Motion clears -> MANUAL (extended timer)
+            # 7. Motion clears -> automation is ready again
             await h.motion_off()
-            h.assert_state(STATE_MANUAL)
-            h.assert_timer_active("extended")
-
-            # 8. Extended timer expires -> IDLE
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
         finally:
             await h.cleanup()
@@ -184,8 +178,7 @@ class TestEveningRoutine:
         2. House becomes inactive (bedtime)
         3. User turns off lights manually -> MANUAL_OFF
         4. Motion detected (walking to bedroom) -> stays MANUAL_OFF
-        5. Motion clears
-        6. Extended timer expires -> IDLE
+        5. Motion clears -> IDLE
         """
         h = await CoordinatorHarness.create(
             hass,
@@ -206,19 +199,13 @@ class TestEveningRoutine:
             # 3. User turns off lights manually -> MANUAL_OFF
             await h.manual_light_off("light.ceiling")
             h.assert_state(STATE_MANUAL_OFF)
-            h.assert_timer_active("extended")
 
             # 4. Motion detected (walking to bedroom) -> stays MANUAL_OFF
             await h.motion_on()
             h.assert_state(STATE_MANUAL_OFF)
 
-            # 5. Motion clears -> extended timer restarts
+            # 5. Motion clears -> automation is ready again
             await h.motion_off()
-            h.assert_state(STATE_MANUAL_OFF)
-            h.assert_timer_active("extended")
-
-            # 6. Extended timer expires -> IDLE
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
         finally:
             await h.cleanup()
@@ -517,9 +504,7 @@ class TestManualInterventionScenarios:
         1. MOTION_AUTO (motion active, lights on)
         2. User adjusts brightness -> MOTION_MANUAL
         3. User adjusts again -> stays MOTION_MANUAL
-        4. Motion clears -> MANUAL (extended timer)
-        5. User turns off all lights -> MANUAL_OFF
-        6. Extended timer expires -> IDLE
+        4. Motion clears -> IDLE
         """
         h = await CoordinatorHarness.create(
             hass,
@@ -546,19 +531,9 @@ class TestManualInterventionScenarios:
             await h.manual_brightness_change("light.lamp", brightness=100)
             h.assert_state(STATE_MOTION_MANUAL)
 
-            # 4. Motion clears -> MANUAL (extended timer)
+            # 4. Motion clears -> automation is ready again
             await h.motion_off()
-            h.assert_state(STATE_MANUAL)
-            h.assert_timer_active("extended")
-
-            # 5. User turns off one light -> stays MANUAL (restarts timer)
-            await h.manual_light_off("light.lamp")
-            h.assert_state(STATE_MANUAL)
-            h.assert_timer_active("extended")
-
-            # User turns off remaining light -> MANUAL_OFF
-            await h.manual_light_off("light.ceiling")
-            h.assert_state(STATE_MANUAL_OFF)
+            h.assert_state(STATE_IDLE)
 
             # 6. Extended timer expires -> IDLE
             await h.expire_timer("extended")
@@ -573,10 +548,8 @@ class TestManualInterventionScenarios:
         2. Motion -> MOTION_AUTO, lights on
         3. User turns off all lights -> MANUAL_OFF
         4. Motion still active -> stays MANUAL_OFF (respects user)
-        5. Motion clears -> MANUAL_OFF (extended timer running)
-        6. Motion returns -> stays MANUAL_OFF
-        7. Extended timer expires -> IDLE
-        8. Motion detected again -> MOTION_AUTO (new cycle)
+        5. Motion clears -> IDLE
+        6. Motion returns -> MOTION_AUTO (new cycle)
         """
         h = await CoordinatorHarness.create(hass)
         try:
@@ -596,24 +569,11 @@ class TestManualInterventionScenarios:
             # (motion was already on, no new event needed)
             h.assert_state(STATE_MANUAL_OFF)
 
-            # 5. Motion clears -> MANUAL_OFF with extended timer
+            # 5. Motion clears -> automation is ready again
             await h.motion_off()
-            h.assert_state(STATE_MANUAL_OFF)
-            h.assert_timer_active("extended")
-
-            # 6. Motion returns -> stays MANUAL_OFF
-            await h.motion_on()
-            h.assert_state(STATE_MANUAL_OFF)
-
-            # Motion clears again
-            await h.motion_off()
-            h.assert_state(STATE_MANUAL_OFF)
-
-            # 7. Extended timer expires -> IDLE
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
 
-            # 8. Motion detected again -> MOTION_AUTO (fresh cycle)
+            # 6. Motion returns -> MOTION_AUTO (fresh cycle)
             await h.motion_on()
             h.assert_state(STATE_MOTION_AUTO)
         finally:
@@ -627,8 +587,7 @@ class TestManualInterventionScenarios:
         1. IDLE, no motion
         2. User turns on lights manually -> MANUAL (extended timer)
         3. Motion detected -> MOTION_MANUAL
-        4. Motion clears -> MANUAL
-        5. Extended timer expires -> IDLE
+        4. Motion clears -> IDLE
         """
         h = await CoordinatorHarness.create(hass)
         try:
@@ -646,13 +605,8 @@ class TestManualInterventionScenarios:
             # Extended timer cancelled during MOTION_MANUAL
             h.assert_timer_inactive("extended")
 
-            # 4. Motion clears -> MANUAL
+            # 4. Motion clears -> automation is ready again
             await h.motion_off()
-            h.assert_state(STATE_MANUAL)
-            h.assert_timer_active("extended")
-
-            # 5. Extended timer expires -> IDLE
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
         finally:
             await h.cleanup()

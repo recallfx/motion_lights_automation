@@ -178,26 +178,22 @@ class TestTimerInteractions:
         harness.assert_state(STATE_MANUAL)
         harness.assert_timer_active("extended")
 
-    async def test_motion_off_in_manual_off_restarts_extended(
+    async def test_motion_off_in_manual_off_rearms_automation(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """Motion clearing in MANUAL_OFF restarts the extended timer."""
+        """Motion clearing in MANUAL_OFF returns to IDLE."""
         # Get to MANUAL_OFF
-        harness.force_state(STATE_AUTO)
+        await harness.motion_on()
+        harness.assert_state(STATE_MOTION_AUTO)
         await harness.light_on("light.ceiling", brightness=200)
         harness.refresh_lights()
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
-        harness.assert_timer_active("extended")
 
-        # Motion on pauses the timer in MANUAL_OFF
-        await harness.motion_on()
-        harness.assert_state(STATE_MANUAL_OFF)
-
-        # Motion off should restart the extended timer
+        # Motion off means the room is empty, so automation is ready again.
         await harness.motion_off()
-        harness.assert_state(STATE_MANUAL_OFF)
-        harness.assert_timer_active("extended")
+        harness.assert_state(STATE_IDLE)
+        harness.assert_timer_inactive("extended")
 
     async def test_timer_expired_in_wrong_state_ignored(
         self, hass: HomeAssistant, harness: CoordinatorHarness

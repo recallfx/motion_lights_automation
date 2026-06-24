@@ -206,15 +206,14 @@ class TestMotionDelay:
         delay_harness.assert_state(STATE_IDLE)
 
     async def test_motion_from_manual_off_with_delay(self, hass):
-        """Motion in MANUAL_OFF with delay configured starts delay timer."""
+        """Motion in MANUAL_OFF with delay configured stays blocked."""
         h = await CoordinatorHarness.create(hass, config_data={CONF_MOTION_DELAY: 5})
         try:
             h.force_state(STATE_MANUAL_OFF)
 
             await h.motion_on()
-            # State stays MANUAL_OFF, delay timer starts
             h.assert_state(STATE_MANUAL_OFF)
-            h.assert_timer_active("motion_delay")
+            h.assert_timer_inactive("motion_delay")
         finally:
             await h.cleanup()
 
@@ -365,7 +364,7 @@ class TestMotionInEveryState:
         harness.assert_timer_active("motion")
 
     async def test_motion_off_from_motion_manual(self, harness):
-        """MOTION_MANUAL + motion off -> MANUAL with extended timer started."""
+        """MOTION_MANUAL + motion off -> IDLE."""
         # Get to MOTION_MANUAL: manual light on -> MANUAL, then motion on
         await harness.manual_light_on("light.ceiling", brightness=200)
         harness.assert_state(STATE_MANUAL)
@@ -374,21 +373,19 @@ class TestMotionInEveryState:
         harness.assert_state(STATE_MOTION_MANUAL)
 
         await harness.motion_off()
-        harness.assert_state(STATE_MANUAL)
-        harness.assert_timer_active("extended")
+        harness.assert_state(STATE_IDLE)
+        harness.assert_timer_inactive("extended")
 
-    async def test_motion_off_from_manual_off_restarts_timer(self, harness):
-        """MANUAL_OFF + motion off -> restarts extended timer."""
+    async def test_motion_off_from_manual_off_rearms_automation(self, harness):
+        """MANUAL_OFF + motion off -> IDLE."""
         harness.force_state(STATE_MANUAL_OFF)
 
-        # Motion on cancels the extended timer
         await harness.motion_on()
         harness.assert_state(STATE_MANUAL_OFF)
 
-        # Motion off restarts the extended timer
         await harness.motion_off()
-        harness.assert_state(STATE_MANUAL_OFF)
-        harness.assert_timer_active("extended")
+        harness.assert_state(STATE_IDLE)
+        harness.assert_timer_inactive("extended")
 
 
 # ============================================================================

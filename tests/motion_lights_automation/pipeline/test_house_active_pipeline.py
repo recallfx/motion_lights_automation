@@ -73,7 +73,7 @@ class TestHouseActiveChangesInEachState:
     """Test house active/inactive transitions in every state machine state.
 
     The coordinator only adjusts brightness in states where lights are
-    auto-controlled (AUTO, MOTION_AUTO, MOTION_MANUAL, MANUAL) and only
+    auto-controlled (AUTO, MOTION_AUTO, MANUAL) and only
     when lights are actually on. Going inactive keeps current brightness;
     going active re-applies brightness via _async_turn_on_lights.
     """
@@ -250,10 +250,10 @@ class TestHouseActiveChangesInEachState:
         finally:
             await h.cleanup()
 
-    async def test_house_active_in_motion_manual_adjusts_brightness(
+    async def test_house_active_in_motion_manual_keeps_manual_brightness(
         self, hass: HomeAssistant
     ) -> None:
-        """MOTION_MANUAL + house becomes active -- adjusts brightness."""
+        """MOTION_MANUAL + house becomes active -- keeps manual brightness."""
         h = await _create_house_harness(hass, initial_house_active="off")
         try:
             await h.motion_on()
@@ -266,8 +266,8 @@ class TestHouseActiveChangesInEachState:
             await h.set_house_active(True)
 
             h.assert_state(STATE_MOTION_MANUAL)
-            assert called["value"], (
-                "_async_turn_on_lights should be called when house goes active"
+            assert not called["value"], (
+                "_async_turn_on_lights should not be called in MOTION_MANUAL"
             )
         finally:
             await h.cleanup()
