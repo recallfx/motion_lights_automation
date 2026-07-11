@@ -122,15 +122,12 @@ class TestManualOffScenarios:
         finally:
             coordinator.async_cleanup_listeners()
 
-    async def test_motion_does_not_reactivate_lights_in_manual_off(
+    async def test_manual_off_after_motion_clear_allows_next_entry(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
-        """Test that motion events don't turn lights back on in MANUAL_OFF state."""
-        from custom_components.motion_lights_automation.timer_manager import TimerType
-
-        # Set up entities
+        """Manual off in an empty room must not suppress the next visit."""
         hass.states.async_set("binary_sensor.motion", "off")
-        hass.states.async_set("light.ceiling", "off")
+        hass.states.async_set("light.ceiling", "on", attributes={"brightness": 200})
 
         coordinator = MotionLightsCoordinator(hass, config_entry)
         await coordinator.async_setup_listeners()
@@ -139,23 +136,24 @@ class TestManualOffScenarios:
             # Skip startup grace period
             coordinator._startup_time = dt_util.now() - timedelta(seconds=200)
 
-            # Start in MANUAL_OFF state (user already turned off lights)
-            coordinator.state_machine.force_state(STATE_MANUAL_OFF)
-            coordinator.timer_manager.start_timer(
-                "extended",
-                TimerType.EXTENDED,
-                coordinator._async_timer_expired,
-            )
+            coordinator.state_machine.force_state(STATE_AUTO)
+            coordinator.light_controller.refresh_all_states()
 
-            # Motion is detected
+            with patch.object(
+                coordinator.light_controller,
+                "is_integration_context",
+                return_value=False,
+            ):
+                hass.states.async_set("light.ceiling", "off")
+                await hass.async_block_till_done()
+
+            assert coordinator.current_state == STATE_IDLE
+            assert not coordinator.timer_manager.has_active_timer("extended")
+
+            # A later arrival is a new visit and should activate normally.
             hass.states.async_set("binary_sensor.motion", "on")
             await hass.async_block_till_done()
-
-            # Should still be in MANUAL_OFF
-            assert coordinator.current_state == STATE_MANUAL_OFF, (
-                f"Expected MANUAL_OFF but got {coordinator.current_state}. "
-                "Motion should not reactivate lights when user has turned them off."
-            )
+            assert coordinator.current_state == STATE_MOTION_AUTO
 
         finally:
             coordinator.async_cleanup_listeners()

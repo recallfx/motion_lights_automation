@@ -176,9 +176,9 @@ class TestEveningRoutine:
 
         1. MANUAL (user has lights on), house active
         2. House becomes inactive (bedtime)
-        3. User turns off lights manually -> MANUAL_OFF
-        4. Motion detected (walking to bedroom) -> stays MANUAL_OFF
-        5. Motion clears -> IDLE
+        3. User turns off lights while motion is clear -> IDLE
+        4. A later entry triggers lights normally -> MOTION_AUTO
+        5. Motion clears -> AUTO
         """
         h = await CoordinatorHarness.create(
             hass,
@@ -196,17 +196,17 @@ class TestEveningRoutine:
             # State doesn't change, just affects brightness calculations
             h.assert_state(STATE_MANUAL)
 
-            # 3. User turns off lights manually -> MANUAL_OFF
+            # 3. No one is detected here, so manual off re-arms immediately
             await h.manual_light_off("light.ceiling")
-            h.assert_state(STATE_MANUAL_OFF)
-
-            # 4. Motion detected (walking to bedroom) -> stays MANUAL_OFF
-            await h.motion_on()
-            h.assert_state(STATE_MANUAL_OFF)
-
-            # 5. Motion clears -> automation is ready again
-            await h.motion_off()
             h.assert_state(STATE_IDLE)
+
+            # 4. A later entry is a new visit and activates normally
+            await h.motion_on()
+            h.assert_state(STATE_MOTION_AUTO)
+
+            # 5. Motion clears -> normal automatic timeout
+            await h.motion_off()
+            h.assert_state(STATE_AUTO)
         finally:
             await h.cleanup()
 

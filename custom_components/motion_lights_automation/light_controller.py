@@ -302,6 +302,7 @@ class LightController:
                         "light",
                         f"turn_{state}",
                         service_data,
+                        blocking=True,
                         context=ctx,
                     ),
                     timeout=10.0,

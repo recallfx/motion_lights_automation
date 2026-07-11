@@ -154,8 +154,12 @@ class MotionTrigger(TriggerHandler):
         This allows motion to reset timers even when motion_activation is disabled.
         The coordinator decides how to handle these callbacks based on motion_activation.
         """
+        old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if not new_state:
+            return
+
+        if old_state and old_state.state == new_state.state:
             return
 
         if new_state.state == "on":

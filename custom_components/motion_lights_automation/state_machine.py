@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 # AUTO_TIMEOUT: No motion, auto-controlled lights timing out
 # MOTION_ADJUSTED: Motion active, user has adjusted lights
 # MANUAL_TIMEOUT: User-controlled lights timing out
-# MANUAL_OFF: User turned off lights, blocking auto-on until timeout
+# MANUAL_OFF: User turned off lights, blocking auto-on while motion remains active
 # DISABLED: Override switch active, automation disabled
 STATE_DISABLED = "disabled"
 STATE_STANDBY = "standby"
