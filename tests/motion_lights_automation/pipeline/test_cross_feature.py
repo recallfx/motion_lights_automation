@@ -25,7 +25,6 @@ from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
     STATE_MANUAL,
-    STATE_MANUAL_OFF,
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
     STATE_OVERRIDDEN,
@@ -674,10 +673,8 @@ class TestMinimalConfig:
 
             # Manual light off
             await h.manual_light_off("light.ceiling")
-            h.assert_state(STATE_MANUAL_OFF)
-
-            await h.expire_timer("extended")
             h.assert_state(STATE_IDLE)
+            h.assert_timer_inactive("extended")
         finally:
             await h.cleanup()
 

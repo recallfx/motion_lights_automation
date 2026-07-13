@@ -131,6 +131,30 @@ class TestMotionTrigger:
         deactivated_callback.assert_called_once()
         activated_callback.assert_not_called()
 
+    def test_motion_trigger_ignores_attribute_only_updates(self, hass: HomeAssistant):
+        """Same-state updates must not look like new motion edges."""
+        config = {"entity_ids": ["binary_sensor.motion1"], "enabled": True}
+        trigger = MotionTrigger(hass, config)
+        activated_callback = MagicMock()
+        deactivated_callback = MagicMock()
+        trigger.on_activated(activated_callback)
+        trigger.on_deactivated(deactivated_callback)
+
+        for state in ("on", "off"):
+            hass.states.async_set("binary_sensor.motion1", state)
+            old_state = MagicMock(state=state)
+            new_state = MagicMock(
+                state=state,
+                entity_id="binary_sensor.motion1",
+            )
+            event = MagicMock(spec=Event)
+            event.data = {"old_state": old_state, "new_state": new_state}
+
+            trigger._async_motion_changed(event)
+
+        activated_callback.assert_not_called()
+        deactivated_callback.assert_not_called()
+
     def test_motion_trigger_get_info(self, hass: HomeAssistant):
         """Test get_info method."""
         config = {"entity_ids": ["binary_sensor.motion1"], "enabled": True}

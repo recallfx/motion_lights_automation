@@ -6,6 +6,8 @@ as the coordinator moves through state transitions.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from homeassistant.core import HomeAssistant
 
 from custom_components.motion_lights_automation.state_machine import (
@@ -71,30 +73,50 @@ class TestTimerLifecycle:
         await harness.expire_timer("extended")
         harness.assert_state(STATE_IDLE)
 
-    async def test_manual_off_starts_extended_timer(
+    async def test_manual_off_while_occupied_has_no_fallback_timer(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """AUTO with light on -> manual light off -> MANUAL_OFF starts 'extended' timer."""
-        harness.force_state(STATE_AUTO)
-        await harness.light_on("light.ceiling", brightness=200)
-        harness.refresh_lights()
+        """Manual off blocks only until the active motion sensor clears."""
+        await harness.motion_on()
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
-        harness.assert_timer_active("extended")
+        harness.assert_timer_inactive("extended")
 
-    async def test_manual_off_timer_expires_to_idle(
+    async def test_manual_off_motion_clear_returns_to_idle(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """MANUAL_OFF -> expire 'extended' -> IDLE."""
-        harness.force_state(STATE_AUTO)
-        await harness.light_on("light.ceiling", brightness=200)
-        harness.refresh_lights()
+        """MANUAL_OFF returns to standby as soon as the room is empty."""
+        await harness.motion_on()
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
 
-        await harness.expire_timer("extended")
+        await harness.motion_off()
+        harness.assert_state(STATE_IDLE)
+
+    async def test_manual_off_keeps_bounded_motion_watchdog(
+        self, hass: HomeAssistant, harness: CoordinatorHarness
+    ) -> None:
+        """Manual-off recovery stays bounded if the OFF callback is missed."""
+        await harness.motion_on()
+        await harness.manual_light_off("light.ceiling")
+
+        harness.assert_state(STATE_MANUAL_OFF)
+        assert harness.coordinator._motion_watchdog_handle is not None
+
+    async def test_manual_off_watchdog_recovers_missed_motion_off(
+        self, hass: HomeAssistant, harness: CoordinatorHarness
+    ) -> None:
+        """The watchdog re-arms automation when the sensor is already clear."""
+        await harness.motion_on()
+        await harness.manual_light_off("light.ceiling")
+        harness.assert_state(STATE_MANUAL_OFF)
+
+        motion_trigger = harness.coordinator.trigger_manager.get_trigger("motion")
+        with patch.object(motion_trigger, "is_active", return_value=False):
+            await harness.coordinator._async_motion_watchdog_fired()
+
         harness.assert_state(STATE_IDLE)
 
 

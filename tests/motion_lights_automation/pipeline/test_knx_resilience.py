@@ -8,8 +8,10 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 
@@ -18,14 +20,17 @@ from custom_components.motion_lights_automation.const import (
     CONF_AMBIENT_LIGHT_THRESHOLD,
     CONF_BRIGHTNESS_INACTIVE,
     CONF_HOUSE_ACTIVE,
+    CONF_OVERRIDE_SWITCH,
 )
 from custom_components.motion_lights_automation.light_controller import PendingCommand
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
     STATE_MANUAL,
+    STATE_MANUAL_OFF,
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
+    STATE_OVERRIDDEN,
 )
 
 from .conftest import CoordinatorHarness
@@ -303,6 +308,385 @@ class TestReconciliation:
         harness.assert_lights_off()
         harness.assert_event_log_contains("inactive brightness 0%")
         await harness.cleanup()
+
+    async def test_accepted_command_that_leaves_light_off_returns_to_idle(
+        self, harness
+    ) -> None:
+        """A completed service call is not proof that the light turned on."""
+        harness.hass.services.async_remove("light", "turn_on")
+
+        async def accept_without_device_change(call) -> None:
+            return None
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_without_device_change
+        )
+
+        with (
+            patch(
+                "custom_components.motion_lights_automation.motion_coordinator."
+                "LIGHT_STATE_CONFIRMATION_DELAY",
+                0,
+            ),
+            patch(
+                "custom_components.motion_lights_automation.light_controller."
+                "PENDING_COMMAND_TTL_SECONDS",
+                0,
+            ),
+        ):
+            await harness.motion_on()
+
+        harness.assert_state(STATE_IDLE)
+        harness.assert_lights_off()
+
+    async def test_delayed_confirmation_keeps_motion_auto(self, harness) -> None:
+        """A late KNX ON must arrive before failed-command reconciliation."""
+        harness.hass.services.async_remove("light", "turn_on")
+        command_seen = asyncio.Event()
+        release_confirmation = asyncio.Event()
+
+        async def accept_then_confirm_later(call) -> None:
+            command_seen.set()
+
+            async def confirm() -> None:
+                await release_confirmation.wait()
+                harness.hass.states.async_set(
+                    "light.ceiling",
+                    "on",
+                    attributes={"brightness": 204},
+                    context=call.context,
+                )
+
+            harness.hass.async_create_task(confirm())
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_then_confirm_later
+        )
+        harness.force_state(STATE_MOTION_AUTO)
+
+        with patch(
+            "custom_components.motion_lights_automation.motion_coordinator."
+            "LIGHT_STATE_CONFIRMATION_DELAY",
+            0.05,
+        ):
+            activation = asyncio.create_task(
+                harness.coordinator._async_turn_on_lights()
+            )
+            await command_seen.wait()
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            release_confirmation.set()
+            await activation
+            await harness.hass.async_block_till_done()
+
+        harness.assert_state(STATE_MOTION_AUTO)
+        harness.assert_lights_on()
+
+    async def test_confirmation_waits_for_pending_command_lifetime(
+        self, harness
+    ) -> None:
+        """A valid late ON must not outlive activation reconciliation."""
+        harness.hass.services.async_remove("light", "turn_on")
+        command_seen = asyncio.Event()
+
+        async def accept_then_confirm_after_old_grace(call) -> None:
+            command_seen.set()
+
+            async def confirm() -> None:
+                await asyncio.sleep(0.05)
+                harness.hass.states.async_set(
+                    "light.ceiling",
+                    "on",
+                    attributes={"brightness": 204},
+                    context=call.context,
+                )
+
+            harness.hass.async_create_task(confirm())
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_then_confirm_after_old_grace
+        )
+        harness.force_state(STATE_MOTION_AUTO)
+
+        with (
+            patch(
+                "custom_components.motion_lights_automation.motion_coordinator."
+                "LIGHT_STATE_CONFIRMATION_DELAY",
+                0.01,
+            ),
+            patch(
+                "custom_components.motion_lights_automation.light_controller."
+                "PENDING_COMMAND_TTL_SECONDS",
+                0.2,
+            ),
+        ):
+            activation = asyncio.create_task(
+                harness.coordinator._async_turn_on_lights()
+            )
+            await command_seen.wait()
+            await activation
+            await harness.hass.async_block_till_done()
+
+        harness.assert_state(STATE_MOTION_AUTO)
+        harness.assert_lights_on()
+
+    async def test_override_cancels_slow_activation_before_it_turns_on(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Leaving MOTION_AUTO must stop unfinished activation work."""
+        harness = await CoordinatorHarness.create(
+            hass,
+            config_data={CONF_OVERRIDE_SWITCH: "switch.override"},
+        )
+        activation_started = asyncio.Event()
+        release_activation = asyncio.Event()
+        light_turned_on = asyncio.Event()
+
+        async def slow_turn_on(_context) -> list[str]:
+            activation_started.set()
+            await release_activation.wait()
+            light_turned_on.set()
+            hass.states.async_set("light.ceiling", "on", attributes={"brightness": 204})
+            return ["light.ceiling"]
+
+        try:
+            with patch.object(
+                harness.coordinator.light_controller,
+                "turn_on_auto_lights",
+                side_effect=slow_turn_on,
+            ):
+                harness.coordinator._handle_motion_on()
+                await activation_started.wait()
+
+                harness.coordinator._handle_override_on()
+                harness.assert_state(STATE_OVERRIDDEN)
+
+                release_activation.set()
+                activation = harness.coordinator._activation_task
+                if activation is not None:
+                    await asyncio.gather(activation, return_exceptions=True)
+                await asyncio.sleep(0)
+
+            assert not light_turned_on.is_set()
+            harness.assert_lights_off()
+        finally:
+            release_activation.set()
+            await harness.cleanup()
+
+    async def test_manual_off_cancels_slow_activation_before_it_turns_on(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Entering MANUAL_OFF must stop unfinished activation work."""
+        harness = await CoordinatorHarness.create(hass, initial_motion="on")
+        activation_started = asyncio.Event()
+        release_activation = asyncio.Event()
+        light_turned_on = asyncio.Event()
+
+        async def slow_turn_on(_context) -> list[str]:
+            activation_started.set()
+            await release_activation.wait()
+            light_turned_on.set()
+            hass.states.async_set("light.ceiling", "on", attributes={"brightness": 204})
+            return ["light.ceiling"]
+
+        try:
+            with patch.object(
+                harness.coordinator.light_controller,
+                "turn_on_auto_lights",
+                side_effect=slow_turn_on,
+            ):
+                harness.coordinator._handle_motion_on()
+                await activation_started.wait()
+                activation = harness.coordinator._activation_task
+                assert activation is not None
+
+                harness.coordinator._handle_all_lights_manually_off(STATE_MOTION_AUTO)
+                harness.assert_state(STATE_MANUAL_OFF)
+
+                release_activation.set()
+                await asyncio.gather(activation, return_exceptions=True)
+
+            assert activation.cancelled()
+            assert not light_turned_on.is_set()
+            harness.assert_lights_off()
+        finally:
+            release_activation.set()
+            await harness.cleanup()
+
+    async def test_failed_activation_does_not_cancel_its_own_task(
+        self, harness
+    ) -> None:
+        """Failed-command reconciliation should complete normally."""
+        harness.hass.services.async_remove("light", "turn_on")
+
+        async def accept_without_device_change(call) -> None:
+            return None
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_without_device_change
+        )
+
+        with (
+            patch(
+                "custom_components.motion_lights_automation.motion_coordinator."
+                "LIGHT_STATE_CONFIRMATION_DELAY",
+                0,
+            ),
+            patch(
+                "custom_components.motion_lights_automation.light_controller."
+                "PENDING_COMMAND_TTL_SECONDS",
+                0,
+            ),
+        ):
+            harness.coordinator._handle_motion_on()
+            activation = harness.coordinator._activation_task
+            assert activation is not None
+            await activation
+
+        assert not activation.cancelled()
+        harness.assert_state(STATE_IDLE)
+        harness.assert_lights_off()
+
+    async def test_old_activation_cannot_reset_a_new_motion_visit(
+        self, harness
+    ) -> None:
+        """An older confirmation timeout must not reset a newer visit."""
+        harness.hass.services.async_remove("light", "turn_on")
+        first_command = asyncio.Event()
+        second_command = asyncio.Event()
+        command_count = 0
+
+        async def accept_without_confirmation(call) -> None:
+            nonlocal command_count
+            command_count += 1
+            (first_command if command_count == 1 else second_command).set()
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_without_confirmation
+        )
+
+        try:
+            with patch(
+                "custom_components.motion_lights_automation.motion_coordinator."
+                "LIGHT_STATE_CONFIRMATION_DELAY",
+                0.5,
+            ):
+                harness.coordinator._handle_motion_on()
+                await first_command.wait()
+                await asyncio.sleep(0.2)
+
+                harness.coordinator._handle_motion_off()
+                harness.coordinator._handle_motion_on()
+                await second_command.wait()
+                await asyncio.sleep(0.35)
+
+                harness.assert_state(STATE_MOTION_AUTO)
+        finally:
+            harness.coordinator.async_cleanup_listeners()
+            await asyncio.sleep(0.2)
+
+    async def test_ambient_reactivation_supersedes_older_confirmation(
+        self, ambient_harness
+    ) -> None:
+        """A newer ambient adjustment must supersede an older failed command."""
+        ambient_harness.hass.services.async_remove("light", "turn_on")
+        first_command = asyncio.Event()
+        second_command = asyncio.Event()
+        command_count = 0
+
+        async def accept_and_confirm_only_second(call) -> None:
+            nonlocal command_count
+            command_count += 1
+            if command_count == 1:
+                first_command.set()
+                return
+
+            second_command.set()
+
+            async def confirm() -> None:
+                await asyncio.sleep(0.35)
+                ambient_harness.hass.states.async_set(
+                    "light.ceiling",
+                    "on",
+                    attributes={"brightness": 204},
+                    context=call.context,
+                )
+
+            ambient_harness.hass.async_create_task(confirm())
+
+        ambient_harness.hass.services.async_register(
+            "light", "turn_on", accept_and_confirm_only_second
+        )
+        ambient_harness.force_state(STATE_MOTION_AUTO)
+        motion_trigger = ambient_harness.coordinator.trigger_manager.get_trigger(
+            "motion"
+        )
+        event = SimpleNamespace(
+            data={
+                "old_state": SimpleNamespace(state="off", attributes={}),
+                "new_state": SimpleNamespace(state="on", attributes={}),
+            }
+        )
+        context = {
+            "is_dark_inside": True,
+            "is_house_active": True,
+            "motion_active": True,
+            "current_state": STATE_MOTION_AUTO,
+            "all_lights": ["light.ceiling"],
+        }
+
+        with (
+            patch(
+                "custom_components.motion_lights_automation.motion_coordinator."
+                "LIGHT_STATE_CONFIRMATION_DELAY",
+                0.5,
+            ),
+            patch.object(motion_trigger, "is_active", return_value=True),
+            patch.object(
+                ambient_harness.coordinator, "_get_context", return_value=context
+            ),
+        ):
+            first = asyncio.create_task(
+                ambient_harness.coordinator._async_ambient_light_changed(event)
+            )
+            await first_command.wait()
+            await asyncio.sleep(0.2)
+            second = asyncio.create_task(
+                ambient_harness.coordinator._async_ambient_light_changed(event)
+            )
+            await second_command.wait()
+            await asyncio.gather(first, second, return_exceptions=True)
+
+        ambient_harness.assert_state(STATE_MOTION_AUTO)
+        ambient_harness.assert_lights_on()
+
+    async def test_cleanup_cancels_pending_activation(self, harness) -> None:
+        """An unloaded coordinator cannot finish activation and turn lights off."""
+        harness.hass.services.async_remove("light", "turn_on")
+        command_seen = asyncio.Event()
+
+        async def accept_without_confirmation(call) -> None:
+            command_seen.set()
+
+        harness.hass.services.async_register(
+            "light", "turn_on", accept_without_confirmation
+        )
+        turn_off = AsyncMock()
+        harness.coordinator._async_turn_off_lights = turn_off
+
+        with patch(
+            "custom_components.motion_lights_automation.motion_coordinator."
+            "LIGHT_STATE_CONFIRMATION_DELAY",
+            0.2,
+        ):
+            harness.coordinator._handle_motion_on()
+            await command_seen.wait()
+            await asyncio.sleep(0)
+            harness.coordinator.async_cleanup_listeners()
+            await asyncio.sleep(0.25)
+
+        harness.assert_state(STATE_MOTION_AUTO)
+        turn_off.assert_not_awaited()
 
     async def test_reconciliation_lights_on_state_but_actually_off(
         self, hass: HomeAssistant

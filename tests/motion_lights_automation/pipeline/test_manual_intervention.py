@@ -84,22 +84,14 @@ class TestManualAdjustmentInMotionAuto:
 
     async def test_brightness_change_transitions_to_motion_manual(self, harness):
         """Changing brightness in MOTION_AUTO should transition to MOTION_MANUAL."""
-        harness.force_state(STATE_MOTION_AUTO)
-        harness.hass.states.async_set(
-            "light.ceiling", "on", attributes={"brightness": 200}
-        )
-        harness.refresh_lights()
+        await harness.motion_on()
 
         await harness.manual_brightness_change("light.ceiling", brightness=100)
         harness.assert_state(STATE_MOTION_MANUAL)
 
     async def test_manual_off_all_lights_transitions_to_manual_off(self, harness):
         """Turning off all lights in MOTION_AUTO should transition to MANUAL_OFF."""
-        harness.force_state(STATE_MOTION_AUTO)
-        harness.hass.states.async_set(
-            "light.ceiling", "on", attributes={"brightness": 200}
-        )
-        harness.refresh_lights()
+        await harness.motion_on()
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
@@ -130,11 +122,9 @@ class TestManualAdjustmentInMotionManual:
 
     async def test_manual_off_all_transitions_to_manual_off(self, harness):
         """Turning off all lights in MOTION_MANUAL should go to MANUAL_OFF."""
-        harness.force_state(STATE_MOTION_MANUAL)
-        harness.hass.states.async_set(
-            "light.ceiling", "on", attributes={"brightness": 200}
-        )
-        harness.refresh_lights()
+        await harness.motion_on()
+        await harness.manual_brightness_change("light.ceiling", brightness=100)
+        harness.assert_state(STATE_MOTION_MANUAL)
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
@@ -170,8 +160,8 @@ class TestManualAdjustmentInAuto:
         await harness.manual_brightness_change("light.ceiling", brightness=100)
         harness.assert_state(STATE_MANUAL)
 
-    async def test_manual_off_all_transitions_to_manual_off(self, harness):
-        """Turning off all lights in AUTO should transition to MANUAL_OFF."""
+    async def test_manual_off_all_transitions_to_idle(self, harness):
+        """Turning off all lights in AUTO should rearm when motion is clear."""
         harness.force_state(STATE_AUTO)
         harness.hass.states.async_set(
             "light.ceiling", "on", attributes={"brightness": 200}
@@ -179,7 +169,26 @@ class TestManualAdjustmentInAuto:
         harness.refresh_lights()
 
         await harness.manual_light_off("light.ceiling")
-        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_state(STATE_IDLE)
+
+    async def test_manual_off_while_room_empty_rearms_immediately(self, harness):
+        """Manual off cannot block the next entry when motion is already clear."""
+        harness.force_state(STATE_AUTO)
+        harness.hass.states.async_set(
+            "light.ceiling", "on", attributes={"brightness": 200}
+        )
+        await harness.hass.async_block_till_done()
+        harness.force_state(STATE_AUTO)
+        harness.refresh_lights()
+
+        await harness.manual_light_off("light.ceiling")
+
+        harness.assert_state(STATE_IDLE)
+        harness.assert_timer_inactive("extended")
+
+        await harness.motion_on()
+        harness.assert_state(STATE_MOTION_AUTO)
+        harness.assert_lights_on()
 
     async def test_manual_off_some_transitions_to_manual(self, multi_light_harness):
         """Turning off one light (others still on) in AUTO -> MANUAL."""
@@ -214,8 +223,8 @@ class TestManualAdjustmentInManual:
         harness.assert_state(STATE_MANUAL)
         harness.assert_timer_active("extended")
 
-    async def test_manual_off_all_transitions_to_manual_off(self, harness):
-        """Turning off all lights in MANUAL should transition to MANUAL_OFF."""
+    async def test_manual_off_all_transitions_to_idle(self, harness):
+        """Turning off all lights in MANUAL should rearm when motion is clear."""
         harness.force_state(STATE_MANUAL)
         harness.hass.states.async_set(
             "light.ceiling", "on", attributes={"brightness": 200}
@@ -223,7 +232,7 @@ class TestManualAdjustmentInManual:
         harness.refresh_lights()
 
         await harness.manual_light_off("light.ceiling")
-        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_state(STATE_IDLE)
 
     async def test_manual_off_some_restarts_timer(self, multi_light_harness):
         """Turning off one light (others on) in MANUAL should stay MANUAL and restart timer."""
@@ -247,19 +256,22 @@ class TestManualAdjustmentInManual:
 class TestManualOffInManualOff:
     """Test manual off interventions while already in MANUAL_OFF state."""
 
-    async def test_another_light_off_restarts_extended_timer(self, multi_light_harness):
-        """Turning off another light in MANUAL_OFF should stay and restart timer."""
+    async def test_another_light_off_rearms_when_motion_is_clear(
+        self, multi_light_harness
+    ):
+        """A stale MANUAL_OFF state should clear once motion is already inactive."""
         h = multi_light_harness
         # One light still on, the other off — simulates partial manual off
         h.hass.states.async_set("light.ceiling", "off")
         h.hass.states.async_set("light.lamp", "on", attributes={"brightness": 200})
+        await h.hass.async_block_till_done()
         h.force_state(STATE_MANUAL_OFF)
         h.refresh_lights()
 
         # User turns off the remaining light manually
         await h.manual_light_off("light.lamp")
-        h.assert_state(STATE_MANUAL_OFF)
-        h.assert_timer_active("extended")
+        h.assert_state(STATE_IDLE)
+        h.assert_timer_inactive("extended")
 
 
 # ======================================================================
@@ -360,10 +372,8 @@ class TestLightsAllOff:
 
     async def test_all_lights_off_in_manual_off_no_transition(self, harness):
         """All lights off in MANUAL_OFF should NOT transition (stay MANUAL_OFF)."""
+        await harness.motion_on()
         harness.force_state(STATE_MANUAL_OFF)
-        harness.hass.states.async_set(
-            "light.ceiling", "on", attributes={"brightness": 200}
-        )
         harness.refresh_lights()
 
         await harness.light_off("light.ceiling")

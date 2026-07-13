@@ -302,6 +302,7 @@ class LightController:
                         "light",
                         f"turn_{state}",
                         service_data,
+                        blocking=True,
                         context=ctx,
                     ),
                     timeout=10.0,
@@ -334,6 +335,23 @@ class LightController:
             return False
         return context.id in self._context_tracking or (
             context.parent_id and context.parent_id in self._context_tracking
+        )
+
+    def has_pending_command(self, target_state: str | None = None) -> bool:
+        """Return whether an unexpired command is still awaiting confirmation."""
+        now = dt_util.now()
+        expired = [
+            entity_id
+            for entity_id, command in self._pending_commands.items()
+            if (now - command.commanded_at).total_seconds()
+            > PENDING_COMMAND_TTL_SECONDS
+        ]
+        for entity_id in expired:
+            del self._pending_commands[entity_id]
+
+        return any(
+            target_state is None or command.target_state == target_state
+            for command in self._pending_commands.values()
         )
 
     def is_expected_state_change(self, entity_id: str, new_state_str: str) -> bool:

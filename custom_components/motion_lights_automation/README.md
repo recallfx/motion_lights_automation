@@ -110,16 +110,17 @@ The integration operates through a finite state machine with 7 distinct states. 
 | STANDBY | Override switch ON | DISABLED | Do nothing |
 | MOTION_DETECTED | Motion stops | AUTO_TIMEOUT | Start motion timer |
 | MOTION_DETECTED | Manual intervention | MOTION_ADJUSTED | Respect manual settings |
+| MOTION_DETECTED | All lights manually turned off | MANUAL_OFF | Keep lights off until motion clears |
 | MOTION_DETECTED | Override switch ON | DISABLED | Cancel all timers |
 | AUTO_TIMEOUT | Motion timer expires | STANDBY | Turn off lights |
 | AUTO_TIMEOUT | Motion detected again | MOTION_DETECTED | Cancel timer, keep lights on |
 | AUTO_TIMEOUT | Manual intervention | MANUAL_TIMEOUT | Switch to extended timer |
-| AUTO_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until motion clears or fallback timeout expires |
+| AUTO_TIMEOUT | All lights manually turned off | STANDBY | Re-arm immediately because motion is already clear |
 | MANUAL_TIMEOUT | Extended timer expires | STANDBY | Turn off lights |
-| MANUAL_TIMEOUT | All lights manually turned off | MANUAL_OFF | Block auto-on until motion clears or fallback timeout expires |
+| MANUAL_TIMEOUT | All lights manually turned off | STANDBY | Re-arm immediately because motion is already clear |
 | MANUAL_OFF | Motion clears | STANDBY | Re-enable automation |
-| MANUAL_OFF | Extended timer expires | STANDBY | Re-enable automation when motion is already clear |
 | MOTION_ADJUSTED | Motion stops | STANDBY | Re-enable automation |
+| MOTION_ADJUSTED | All lights manually turned off | MANUAL_OFF | Keep lights off until motion clears |
 | DISABLED | Override switch OFF | Evaluate current state | Transition to appropriate state |
 | ANY | Override switch ON | DISABLED | Cancel all timers, disable automation |
 
@@ -289,7 +290,6 @@ The integration uses two types of timers with different purposes.
 
 **When It Starts:**
 - Manual intervention detected during AUTO_TIMEOUT → MANUAL_TIMEOUT
-- User turns off lights during AUTO_TIMEOUT → MANUAL_OFF
 
 **What It Does:**
 - Respects that you took manual control
@@ -663,10 +663,9 @@ Events are logged to the sensor's `recent_events` and `event_log` attributes for
 
 **To reset:**
 1. Leave the room so motion clears
-2. Wait for extended timeout to expire if motion was already clear (default 20 minutes)
-3. Or disable and re-enable motion activation
-4. Or toggle override switch
-5. Or reload the integration
+2. Or disable and re-enable motion activation
+3. Or toggle override switch
+4. Or reload the integration
 
 ### Integration Won't Load
 
