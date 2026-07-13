@@ -56,8 +56,7 @@ from .triggers import MotionTrigger, OverrideTrigger, TriggerManager
 
 _LOGGER = logging.getLogger(__name__)
 
-# Allow integrations such as KNX to publish their device confirmation after the
-# service handler returns.
+# How often to check for a device confirmation while its command remains pending.
 LIGHT_STATE_CONFIRMATION_DELAY = 1.0
 
 
@@ -234,6 +233,16 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.state_machine.on_enter_state(STATE_MANUAL_OFF, self._on_enter_manual_off)
         self.state_machine.on_enter_state(STATE_IDLE, self._on_enter_idle)
+        for state in (
+            STATE_IDLE,
+            STATE_AUTO,
+            STATE_MANUAL,
+            STATE_MANUAL_OFF,
+            STATE_MOTION_AUTO,
+            STATE_MOTION_MANUAL,
+            STATE_OVERRIDDEN,
+        ):
+            self.state_machine.on_exit_state(state, self._on_exit_state)
         self.state_machine.on_transition(self._on_transition)
 
         # Set up motion trigger
@@ -908,6 +917,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         task.add_done_callback(self._activation_task_done)
         return task
 
+    def _on_exit_state(self, from_state=None, to_state=None, event=None) -> None:
+        """Invalidate activation work started by the state being exited."""
+        self._cancel_activation_task()
+
     @callback
     def _activation_task_done(self, task: asyncio.Task) -> None:
         """Clear the task reference without clobbering a newer activation."""
@@ -919,7 +932,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._activation_generation += 1
         task = self._activation_task
         self._activation_task = None
-        if task is not None and not task.done():
+        if task is not None and not task.done() and task is not asyncio.current_task():
             task.cancel()
 
     def _on_enter_auto(self, from_state=None, to_state=None, event=None) -> None:
@@ -966,7 +979,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _on_enter_manual_off(self, from_state=None, to_state=None, event=None) -> None:
         """Entering MANUAL_OFF - block automation until motion clears."""
         _LOGGER.debug("Entering MANUAL_OFF state - cancelling motion timer")
-        self._cancel_motion_watchdog()
+        self._start_motion_watchdog()
         self._log_human_event("Lights turned off manually")
         self.timer_manager.cancel_timer("motion")
         self.timer_manager.cancel_timer("motion_delay")
@@ -1045,15 +1058,19 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         context = self._get_context()
         lights_were_on = self.light_controller.any_lights_on(refresh=True)
 
-        accepted_commands = await self.light_controller.turn_on_auto_lights(context)
+        await self.light_controller.turn_on_auto_lights(context)
 
         lights_are_on = self.light_controller.any_lights_on(refresh=True)
-        if accepted_commands and not lights_are_on:
+        while not lights_are_on and self.light_controller.has_pending_command("on"):
             _LOGGER.debug(
-                "Waiting %.1fs for light state confirmation",
+                "Waiting %.1fs for pending light state confirmation",
                 LIGHT_STATE_CONFIRMATION_DELAY,
             )
             await asyncio.sleep(LIGHT_STATE_CONFIRMATION_DELAY)
+
+            if activation_generation != self._activation_generation:
+                return
+
             lights_are_on = self.light_controller.any_lights_on(refresh=True)
 
         if activation_generation != self._activation_generation:
@@ -1209,7 +1226,7 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ========================================================================
 
     def _start_motion_watchdog(self) -> None:
-        """Start watchdog timer that fires after max time in MOTION states.
+        """Start watchdog timer for states that depend on current motion.
 
         Protects against stuck motion sensors that never report "off".
         When the watchdog fires, it re-checks the actual sensor state.
@@ -1230,14 +1247,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_motion_watchdog_fired(self) -> None:
         """Motion watchdog fired — re-check actual motion sensor state.
 
-        If sensor shows off but state machine is in a MOTION state,
+        If sensor shows off but state machine depends on active motion,
         trigger motion_off to correct the drift.
         """
         # Cancel handle properly (not just set to None) to avoid lingering timers
         self._cancel_motion_watchdog()
         current = self.state_machine.current_state
 
-        if current not in (STATE_MOTION_AUTO, STATE_MOTION_MANUAL):
+        if current not in (STATE_MOTION_AUTO, STATE_MOTION_MANUAL, STATE_MANUAL_OFF):
             _LOGGER.debug(
                 "Motion watchdog fired but state is %s — no action needed", current
             )
