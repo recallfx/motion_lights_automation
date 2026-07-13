@@ -6,6 +6,8 @@ as the coordinator moves through state transitions.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from homeassistant.core import HomeAssistant
 
 from custom_components.motion_lights_automation.state_machine import (
@@ -91,6 +93,30 @@ class TestTimerLifecycle:
         harness.assert_state(STATE_MANUAL_OFF)
 
         await harness.motion_off()
+        harness.assert_state(STATE_IDLE)
+
+    async def test_manual_off_keeps_bounded_motion_watchdog(
+        self, hass: HomeAssistant, harness: CoordinatorHarness
+    ) -> None:
+        """Manual-off recovery stays bounded if the OFF callback is missed."""
+        await harness.motion_on()
+        await harness.manual_light_off("light.ceiling")
+
+        harness.assert_state(STATE_MANUAL_OFF)
+        assert harness.coordinator._motion_watchdog_handle is not None
+
+    async def test_manual_off_watchdog_recovers_missed_motion_off(
+        self, hass: HomeAssistant, harness: CoordinatorHarness
+    ) -> None:
+        """The watchdog re-arms automation when the sensor is already clear."""
+        await harness.motion_on()
+        await harness.manual_light_off("light.ceiling")
+        harness.assert_state(STATE_MANUAL_OFF)
+
+        motion_trigger = harness.coordinator.trigger_manager.get_trigger("motion")
+        with patch.object(motion_trigger, "is_active", return_value=False):
+            await harness.coordinator._async_motion_watchdog_fired()
+
         harness.assert_state(STATE_IDLE)
 
 
