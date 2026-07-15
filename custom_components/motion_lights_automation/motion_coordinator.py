@@ -345,25 +345,22 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.state_machine.force_state(STATE_OVERRIDDEN)
             self._log_human_event("Integration restarted (override active)")
         elif self.light_controller.any_lights_on(refresh=True):
-            # Lights are on after restart - we can't know if they were manual or auto
-            # Safest approach: assume automation control (AUTO or MOTION_AUTO)
-            # Start appropriate timer so lights turn off if conditions aren't met
+            # Ownership is unknown after restart, so preserve the visible state.
+            # Treat already-on lights as manual until the extended timeout.
             if motion_trigger and motion_trigger.is_active():
-                # Motion is active - go to MOTION_AUTO
-                self.state_machine.force_state(STATE_MOTION_AUTO)
+                self.state_machine.force_state(STATE_MOTION_MANUAL)
+                self._start_motion_watchdog()
                 self._log_human_event(
                     "Integration restarted (lights on, motion active)"
                 )
             else:
-                # No motion currently - go to AUTO and start motion timer
-                # This way lights will turn off after timeout if motion doesn't resume
-                self.state_machine.force_state(STATE_AUTO)
+                self.state_machine.force_state(STATE_MANUAL)
                 self._log_human_event(
-                    "Integration restarted (lights on, starting timeout)"
+                    "Integration restarted (lights on, starting extended timeout)"
                 )
                 self.timer_manager.start_timer(
-                    "motion",
-                    TimerType.MOTION,
+                    "extended",
+                    TimerType.EXTENDED,
                     self._async_timer_expired,
                 )
         else:

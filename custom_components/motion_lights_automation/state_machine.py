@@ -140,7 +140,7 @@ class MotionLightsStateMachine:
             STATE_MOTION_AUTO, StateTransitionEvent.MOTION_OFF, STATE_AUTO
         )
         self._add_transition(
-            STATE_MOTION_MANUAL, StateTransitionEvent.MOTION_OFF, STATE_IDLE
+            STATE_MOTION_MANUAL, StateTransitionEvent.MOTION_OFF, STATE_MANUAL
         )
         self._add_transition(
             STATE_MANUAL_OFF, StateTransitionEvent.MOTION_OFF, STATE_IDLE

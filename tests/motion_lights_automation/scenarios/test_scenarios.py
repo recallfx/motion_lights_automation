@@ -25,6 +25,7 @@ from custom_components.motion_lights_automation.const import (
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
+    STATE_MANUAL,
     STATE_MANUAL_OFF,
     STATE_MOTION_AUTO,
     STATE_MOTION_MANUAL,
@@ -316,7 +317,7 @@ class TestManualBrightnessScenarios:
     async def test_motion_off_after_manual_adjustment_rearms_automation(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
-        """Test that motion clearing after manual adjustment returns to IDLE."""
+        """Test that motion clearing restarts the manual timeout."""
         # Set up entities
         hass.states.async_set("binary_sensor.motion", "on")
         hass.states.async_set("light.ceiling", "on", attributes={"brightness": 200})
@@ -336,8 +337,8 @@ class TestManualBrightnessScenarios:
             hass.states.async_set("binary_sensor.motion", "off")
             await hass.async_block_till_done()
 
-            assert coordinator.current_state == STATE_IDLE
-            assert not coordinator.timer_manager.has_active_timer("extended")
+            assert coordinator.current_state == STATE_MANUAL
+            assert coordinator.timer_manager.has_active_timer("extended")
 
         finally:
             coordinator.async_cleanup_listeners()

@@ -36,6 +36,7 @@ from custom_components.motion_lights_automation.state_machine import (
     STATE_IDLE,
     STATE_MANUAL,
     STATE_MOTION_AUTO,
+    STATE_MOTION_MANUAL,
     STATE_OVERRIDDEN,
 )
 
@@ -129,7 +130,7 @@ class TestCoordinatorSetup:
     async def test_coordinator_sets_initial_state_motion_auto(
         self, hass: HomeAssistant
     ) -> None:
-        """Lights on + motion on at startup -> MOTION_AUTO."""
+        """Lights on + motion on at startup -> MOTION_MANUAL."""
         h = await CoordinatorHarness.create(
             hass,
             initial_motion="on",
@@ -137,14 +138,14 @@ class TestCoordinatorSetup:
             skip_grace_period=True,
         )
         try:
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_MOTION_MANUAL)
         finally:
             await h.cleanup()
 
     async def test_coordinator_sets_initial_state_auto(
         self, hass: HomeAssistant
     ) -> None:
-        """Lights on + no motion at startup -> AUTO with timer."""
+        """Lights on + no motion at startup -> MANUAL with extended timer."""
         h = await CoordinatorHarness.create(
             hass,
             initial_motion="off",
@@ -152,8 +153,8 @@ class TestCoordinatorSetup:
             skip_grace_period=True,
         )
         try:
-            h.assert_state(STATE_AUTO)
-            h.assert_timer_active("motion")
+            h.assert_state(STATE_MANUAL)
+            h.assert_timer_active("extended")
         finally:
             await h.cleanup()
 

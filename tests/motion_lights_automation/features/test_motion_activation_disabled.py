@@ -215,12 +215,13 @@ async def test_motion_keeps_resetting_timer_preventing_shutoff(
         # State should still be MOTION_MANUAL and lights still on
         assert hass.states.get("light.background").state == "on"
 
-        # When motion clears, automation is ready again
+        # When motion clears, the manual timeout restarts.
         hass.states.async_set("binary_sensor.motion", "off")
         await hass.async_block_till_done()
 
-        assert coordinator.current_state == STATE_IDLE
-        assert not coordinator.timer_manager.has_active_timer("extended")
+        assert coordinator.current_state == STATE_MANUAL
+        assert coordinator.timer_manager.has_active_timer("extended")
+        assert hass.states.get("light.background").state == "on"
     finally:
         # Clean up
         coordinator.async_cleanup_listeners()
