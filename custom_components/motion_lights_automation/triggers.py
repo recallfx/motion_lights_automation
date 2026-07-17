@@ -253,13 +253,17 @@ class OverrideTrigger(TriggerHandler):
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
 
-        if not new_state or not old_state:
+        if not new_state:
             return
 
-        if new_state.state == "on" and old_state.state == "off":
+        old_value = old_state.state if old_state else None
+        if new_state.state == old_value:
+            return
+
+        if new_state.state == "on":
             _LOGGER.info("Override activated")
             self._fire_activated()
-        elif new_state.state == "off" and old_state.state == "on":
+        elif new_state.state == "off" and old_value == "on":
             _LOGGER.info("Override deactivated")
             self._fire_deactivated()
 
