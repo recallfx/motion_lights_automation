@@ -177,9 +177,10 @@ class TestEveningRoutine:
 
         1. MANUAL (user has lights on), house active
         2. House becomes inactive (bedtime)
-        3. User turns off lights while motion is clear -> IDLE
-        4. A later entry triggers lights normally -> MOTION_AUTO
-        5. Motion clears -> AUTO
+        3. User turns off lights while motion is clear -> MANUAL_OFF
+        4. Sustained absence expires -> IDLE
+        5. A later entry triggers lights normally -> MOTION_AUTO
+        6. Motion clears -> AUTO
         """
         h = await CoordinatorHarness.create(
             hass,
@@ -197,15 +198,19 @@ class TestEveningRoutine:
             # State doesn't change, just affects brightness calculations
             h.assert_state(STATE_MANUAL)
 
-            # 3. No one is detected here, so manual off re-arms immediately
+            # 3. A clear PIR alone is not enough to prove the room is empty.
             await h.manual_light_off("light.ceiling")
+            h.assert_state(STATE_MANUAL_OFF)
+
+            # 4. Sustained absence re-arms the automation.
+            await h.expire_timer("motion")
             h.assert_state(STATE_IDLE)
 
-            # 4. A later entry is a new visit and activates normally
+            # 5. A later entry is a new visit and activates normally
             await h.motion_on()
             h.assert_state(STATE_MOTION_AUTO)
 
-            # 5. Motion clears -> normal automatic timeout
+            # 6. Motion clears -> normal automatic timeout
             await h.motion_off()
             h.assert_state(STATE_AUTO)
         finally:
@@ -550,8 +555,10 @@ class TestManualInterventionScenarios:
         2. Motion -> MOTION_AUTO, lights on
         3. User turns off all lights -> MANUAL_OFF
         4. Motion still active -> stays MANUAL_OFF (respects user)
-        5. Motion clears -> IDLE
-        6. Motion returns -> MOTION_AUTO (new cycle)
+        5. Motion clears -> absence wait starts
+        6. Motion during the wait stays dark
+        7. Sustained absence -> IDLE
+        8. Motion returns -> MOTION_AUTO (new cycle)
         """
         h = await CoordinatorHarness.create(hass)
         try:
@@ -571,11 +578,22 @@ class TestManualInterventionScenarios:
             # (motion was already on, no new event needed)
             h.assert_state(STATE_MANUAL_OFF)
 
-            # 5. Motion clears -> automation is ready again
+            # 5. Motion clears -> absence wait starts.
             await h.motion_off()
+            h.assert_state(STATE_MANUAL_OFF)
+            h.assert_timer_active("motion")
+
+            # 6. More motion proves the person is still present.
+            await h.motion_on()
+            h.assert_state(STATE_MANUAL_OFF)
+            h.assert_lights_off()
+
+            # 7. Only sustained absence re-arms automation.
+            await h.motion_off()
+            await h.expire_timer("motion")
             h.assert_state(STATE_IDLE)
 
-            # 6. Motion returns -> MOTION_AUTO (fresh cycle)
+            # 8. Motion returns -> MOTION_AUTO (fresh cycle)
             await h.motion_on()
             h.assert_state(STATE_MOTION_AUTO)
         finally:

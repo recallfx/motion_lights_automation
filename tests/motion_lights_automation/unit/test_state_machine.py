@@ -104,11 +104,11 @@ class TestMotionLightsStateMachine:
         assert sm.current_state == STATE_MANUAL
 
     def test_motion_off_from_manual_off(self) -> None:
-        """Test MOTION_OFF transition from MANUAL_OFF to IDLE."""
+        """MOTION_OFF alone must not release the MANUAL_OFF latch."""
         sm = MotionLightsStateMachine(initial_state=STATE_MANUAL_OFF)
 
-        assert sm.transition(StateTransitionEvent.MOTION_OFF)
-        assert sm.current_state == STATE_IDLE
+        assert not sm.transition(StateTransitionEvent.MOTION_OFF)
+        assert sm.current_state == STATE_MANUAL_OFF
 
     def test_override_on_transitions(self) -> None:
         """Test OVERRIDE_ON transitions to OVERRIDDEN from all states."""

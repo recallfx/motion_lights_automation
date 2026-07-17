@@ -403,7 +403,7 @@ The integration creates a sensor entity with comprehensive diagnostic informatio
 - `auto-timeout` - Motion stopped, countdown to lights off
 - `motion-adjusted` - Manual adjustment detected during motion
 - `manual-timeout` - Manual control, extended timer running
-- `manual-off` - User manually turned off lights; automation waits until motion clears
+- `manual-off` - User manually turned off lights; automation waits for sustained absence
 - `disabled` - Override switch is ON (automation disabled)
 
 **Key Attributes:**

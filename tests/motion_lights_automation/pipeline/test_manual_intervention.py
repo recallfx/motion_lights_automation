@@ -160,8 +160,8 @@ class TestManualAdjustmentInAuto:
         await harness.manual_brightness_change("light.ceiling", brightness=100)
         harness.assert_state(STATE_MANUAL)
 
-    async def test_manual_off_all_transitions_to_idle(self, harness):
-        """Turning off all lights in AUTO should rearm when motion is clear."""
+    async def test_manual_off_all_starts_absence_wait(self, harness):
+        """Turning off all lights in AUTO should require sustained absence."""
         harness.force_state(STATE_AUTO)
         harness.hass.states.async_set(
             "light.ceiling", "on", attributes={"brightness": 200}
@@ -169,10 +169,14 @@ class TestManualAdjustmentInAuto:
         harness.refresh_lights()
 
         await harness.manual_light_off("light.ceiling")
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
+
+        await harness.expire_timer("motion")
         harness.assert_state(STATE_IDLE)
 
-    async def test_manual_off_while_room_empty_rearms_immediately(self, harness):
-        """Manual off cannot block the next entry when motion is already clear."""
+    async def test_manual_off_with_clear_pir_still_requires_absence_wait(self, harness):
+        """The user's switch action is presence evidence even if the PIR is clear."""
         harness.force_state(STATE_AUTO)
         harness.hass.states.async_set(
             "light.ceiling", "on", attributes={"brightness": 200}
@@ -183,8 +187,18 @@ class TestManualAdjustmentInAuto:
 
         await harness.manual_light_off("light.ceiling")
 
-        harness.assert_state(STATE_IDLE)
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
         harness.assert_timer_inactive("extended")
+
+        # Movement before the wait expires must not turn the light back on.
+        await harness.motion_on()
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_lights_off()
+
+        await harness.motion_off()
+        await harness.expire_timer("motion")
+        harness.assert_state(STATE_IDLE)
 
         await harness.motion_on()
         harness.assert_state(STATE_MOTION_AUTO)
@@ -223,8 +237,8 @@ class TestManualAdjustmentInManual:
         harness.assert_state(STATE_MANUAL)
         harness.assert_timer_active("extended")
 
-    async def test_manual_off_all_transitions_to_idle(self, harness):
-        """Turning off all lights in MANUAL should rearm when motion is clear."""
+    async def test_manual_off_all_starts_absence_wait(self, harness):
+        """Turning off all lights in MANUAL should require sustained absence."""
         harness.force_state(STATE_MANUAL)
         harness.hass.states.async_set(
             "light.ceiling", "on", attributes={"brightness": 200}
@@ -232,6 +246,10 @@ class TestManualAdjustmentInManual:
         harness.refresh_lights()
 
         await harness.manual_light_off("light.ceiling")
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
+
+        await harness.expire_timer("motion")
         harness.assert_state(STATE_IDLE)
 
     async def test_manual_off_some_restarts_timer(self, multi_light_harness):
@@ -256,10 +274,10 @@ class TestManualAdjustmentInManual:
 class TestManualOffInManualOff:
     """Test manual off interventions while already in MANUAL_OFF state."""
 
-    async def test_another_light_off_rearms_when_motion_is_clear(
+    async def test_another_light_off_restarts_absence_wait_when_motion_is_clear(
         self, multi_light_harness
     ):
-        """A stale MANUAL_OFF state should clear once motion is already inactive."""
+        """Another manual off is presence evidence even when the PIR is clear."""
         h = multi_light_harness
         # One light still on, the other off — simulates partial manual off
         h.hass.states.async_set("light.ceiling", "off")
@@ -270,7 +288,8 @@ class TestManualOffInManualOff:
 
         # User turns off the remaining light manually
         await h.manual_light_off("light.lamp")
-        h.assert_state(STATE_IDLE)
+        h.assert_state(STATE_MANUAL_OFF)
+        h.assert_timer_active("motion")
         h.assert_timer_inactive("extended")
 
 

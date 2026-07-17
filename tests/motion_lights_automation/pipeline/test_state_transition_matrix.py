@@ -122,10 +122,10 @@ class TestMotionOffTransitions:
         assert sm.transition(StateTransitionEvent.MOTION_OFF) is False
         assert sm.current_state == STATE_MANUAL
 
-    def test_from_manual_off_goes_to_idle(self) -> None:
+    def test_from_manual_off_no_transition(self) -> None:
         sm = _make_sm(STATE_MANUAL_OFF)
-        assert sm.transition(StateTransitionEvent.MOTION_OFF) is True
-        assert sm.current_state == STATE_IDLE
+        assert sm.transition(StateTransitionEvent.MOTION_OFF) is False
+        assert sm.current_state == STATE_MANUAL_OFF
 
     def test_from_overridden_no_transition(self) -> None:
         sm = _make_sm(STATE_OVERRIDDEN)

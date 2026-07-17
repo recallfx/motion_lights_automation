@@ -106,13 +106,16 @@ class TestManualOffScenarios:
                 "Lights should stay off when user turns them off during motion."
             )
 
-            # While motion is active, there is no reset timer. Motion clearing
-            # is the reset signal.
+            # While motion is active, there is no reset timer.
             assert not coordinator.timer_manager.has_active_timer("extended")
 
-            # Leaving the room re-arms automation immediately.
+            # A clear PIR starts the absence window but does not re-arm yet.
             hass.states.async_set("binary_sensor.motion", "off")
             await hass.async_block_till_done()
+            assert coordinator.current_state == STATE_MANUAL_OFF
+            assert coordinator.timer_manager.has_active_timer("motion")
+
+            await coordinator._async_timer_expired("motion")
             assert coordinator.current_state == STATE_IDLE
 
             # Coming back triggers the usual motion flow.
@@ -126,7 +129,7 @@ class TestManualOffScenarios:
     async def test_manual_off_after_motion_clear_allows_next_entry(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
-        """Manual off in an empty room must not suppress the next visit."""
+        """Manual off with a clear PIR must wait before allowing the next visit."""
         hass.states.async_set("binary_sensor.motion", "off")
         hass.states.async_set("light.ceiling", "on", attributes={"brightness": 200})
 
@@ -148,8 +151,12 @@ class TestManualOffScenarios:
                 hass.states.async_set("light.ceiling", "off")
                 await hass.async_block_till_done()
 
-            assert coordinator.current_state == STATE_IDLE
+            assert coordinator.current_state == STATE_MANUAL_OFF
+            assert coordinator.timer_manager.has_active_timer("motion")
             assert not coordinator.timer_manager.has_active_timer("extended")
+
+            await coordinator._async_timer_expired("motion")
+            assert coordinator.current_state == STATE_IDLE
 
             # A later arrival is a new visit and should activate normally.
             hass.states.async_set("binary_sensor.motion", "on")
@@ -350,7 +357,7 @@ class TestTimerExpiryScenarios:
     async def test_manual_off_timer_expires_returns_to_idle(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ) -> None:
-        """Test that MANUAL_OFF returns to IDLE when extended timer expires."""
+        """Test that MANUAL_OFF returns to IDLE when its absence timer expires."""
         # Set up entities
         hass.states.async_set("binary_sensor.motion", "off")
         hass.states.async_set("light.ceiling", "off")
@@ -362,8 +369,8 @@ class TestTimerExpiryScenarios:
             # Start in MANUAL_OFF
             coordinator.state_machine.force_state(STATE_MANUAL_OFF)
 
-            # Simulate timer expiry
-            await coordinator._async_timer_expired("extended")
+            # Simulate sustained-absence timer expiry
+            await coordinator._async_timer_expired("motion")
 
             # Should be in IDLE now
             assert coordinator.current_state == STATE_IDLE
