@@ -97,18 +97,18 @@ class TestMotionLightsStateMachine:
         assert sm.current_state == STATE_AUTO
 
     def test_motion_off_from_motion_manual(self) -> None:
-        """Test MOTION_OFF transition from MOTION_MANUAL to IDLE."""
+        """Test MOTION_OFF transition from MOTION_MANUAL to MANUAL."""
         sm = MotionLightsStateMachine(initial_state=STATE_MOTION_MANUAL)
 
         assert sm.transition(StateTransitionEvent.MOTION_OFF)
-        assert sm.current_state == STATE_IDLE
+        assert sm.current_state == STATE_MANUAL
 
     def test_motion_off_from_manual_off(self) -> None:
-        """Test MOTION_OFF transition from MANUAL_OFF to IDLE."""
+        """MOTION_OFF alone must not release the MANUAL_OFF latch."""
         sm = MotionLightsStateMachine(initial_state=STATE_MANUAL_OFF)
 
-        assert sm.transition(StateTransitionEvent.MOTION_OFF)
-        assert sm.current_state == STATE_IDLE
+        assert not sm.transition(StateTransitionEvent.MOTION_OFF)
+        assert sm.current_state == STATE_MANUAL_OFF
 
     def test_override_on_transitions(self) -> None:
         """Test OVERRIDE_ON transitions to OVERRIDDEN from all states."""
@@ -372,7 +372,7 @@ class TestMotionLightsStateMachine:
         assert sm.current_state == STATE_IDLE
 
     def test_manual_intervention_cycle(self) -> None:
-        """Test manual intervention: MOTION_AUTO -> MOTION_MANUAL -> IDLE."""
+        """Test manual intervention: MOTION_AUTO -> MOTION_MANUAL -> MANUAL."""
         sm = MotionLightsStateMachine(initial_state=STATE_MOTION_AUTO)
 
         # User intervenes
@@ -381,7 +381,7 @@ class TestMotionLightsStateMachine:
 
         # Motion ends
         assert sm.transition(StateTransitionEvent.MOTION_OFF)
-        assert sm.current_state == STATE_IDLE
+        assert sm.current_state == STATE_MANUAL
 
     def test_override_cycle(self) -> None:
         """Test override functionality."""

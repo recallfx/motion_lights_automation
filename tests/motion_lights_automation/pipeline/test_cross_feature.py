@@ -520,9 +520,10 @@ class TestAllFeaturesSimultaneous:
             await h.manual_brightness_change("light.ceiling", brightness=150)
             h.assert_state(STATE_MOTION_MANUAL)
 
-            # Step 6: Motion clears -> automation is ready again
+            # Step 6: Motion clears -> manual timeout restarts
             await h.motion_off("binary_sensor.motion1")
-            h.assert_state(STATE_IDLE)
+            h.assert_state(STATE_MANUAL)
+            h.assert_timer_active("extended")
         finally:
             await h.cleanup()
 

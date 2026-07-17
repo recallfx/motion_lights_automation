@@ -345,25 +345,22 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.state_machine.force_state(STATE_OVERRIDDEN)
             self._log_human_event("Integration restarted (override active)")
         elif self.light_controller.any_lights_on(refresh=True):
-            # Lights are on after restart - we can't know if they were manual or auto
-            # Safest approach: assume automation control (AUTO or MOTION_AUTO)
-            # Start appropriate timer so lights turn off if conditions aren't met
+            # Ownership is unknown after restart, so preserve the visible state.
+            # Treat already-on lights as manual until the extended timeout.
             if motion_trigger and motion_trigger.is_active():
-                # Motion is active - go to MOTION_AUTO
-                self.state_machine.force_state(STATE_MOTION_AUTO)
+                self.state_machine.force_state(STATE_MOTION_MANUAL)
+                self._start_motion_watchdog()
                 self._log_human_event(
                     "Integration restarted (lights on, motion active)"
                 )
             else:
-                # No motion currently - go to AUTO and start motion timer
-                # This way lights will turn off after timeout if motion doesn't resume
-                self.state_machine.force_state(STATE_AUTO)
+                self.state_machine.force_state(STATE_MANUAL)
                 self._log_human_event(
-                    "Integration restarted (lights on, starting timeout)"
+                    "Integration restarted (lights on, starting extended timeout)"
                 )
                 self.timer_manager.start_timer(
-                    "motion",
-                    TimerType.MOTION,
+                    "extended",
+                    TimerType.EXTENDED,
                     self._async_timer_expired,
                 )
         else:
@@ -392,12 +389,14 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.timer_manager.cancel_all_timers()
                 self.state_machine.transition(StateTransitionEvent.MOTION_ON)
             elif current == STATE_MANUAL_OFF:
-                # User turned lights off - stay dark while they're present.
-                # Automation is re-armed when motion clears.
+                # User turned lights off. Any renewed motion proves the room is
+                # still occupied, so cancel the absence window and stay dark.
                 self.timer_manager.cancel_timer("extended")
+                self.timer_manager.cancel_timer("motion")
                 self.timer_manager.cancel_timer("motion_delay")
+                self._start_motion_watchdog()
                 _LOGGER.debug(
-                    "Motion detected in %s - keeping lights off until motion clears",
+                    "Motion detected in %s - keeping lights off and resetting absence wait",
                     current,
                 )
                 return
@@ -448,10 +447,10 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif current == STATE_MOTION_MANUAL:
                 self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
             elif current == STATE_MANUAL_OFF:
-                # User left the room - re-arm automation immediately.
-                _LOGGER.debug("Motion cleared in %s - returning to standby", current)
-                self.timer_manager.cancel_timer("extended")
-                self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+                # A PIR going clear is not proof that the person left. Keep the
+                # manual-off latch until a sustained absence window expires.
+                self._cancel_motion_watchdog()
+                self._start_manual_off_absence_wait()
         except Exception:
             _LOGGER.exception("Error in motion OFF handler")
 
@@ -694,36 +693,43 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 motion_active = motion_trigger.is_active() if motion_trigger else False
                 if motion_active:
                     _LOGGER.info(
-                        "Additional manual OFF in MANUAL_OFF state - staying blocked until motion clears"
+                        "Additional manual OFF in MANUAL_OFF state - staying blocked"
                     )
                 else:
                     _LOGGER.info(
-                        "Additional manual OFF after motion cleared - returning to standby"
+                        "Additional manual OFF while motion is clear - restarting absence wait"
                     )
-                    self.state_machine.transition(StateTransitionEvent.MOTION_OFF)
+                    self._handle_motion_off()
         elif current == STATE_IDLE:
             if new_state.state == "on":
                 self.state_machine.transition(StateTransitionEvent.MANUAL_INTERVENTION)
 
     def _handle_all_lights_manually_off(self, current: str) -> None:
-        """Block only while motion shows that the room is occupied."""
-        motion_trigger = self.trigger_manager.get_trigger("motion")
-        motion_active = motion_trigger.is_active() if motion_trigger else False
-
-        if motion_active:
-            _LOGGER.info(
-                "User turned off all lights in %s - blocking until motion clears",
-                current,
-            )
-            self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+        """Latch manual off until the room has stayed quiet long enough."""
+        if not self.trigger_manager.get_trigger("motion"):
+            self.timer_manager.cancel_all_timers()
+            self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
             return
 
         _LOGGER.info(
-            "User turned off all lights in %s after motion cleared - returning to standby",
+            "User turned off all lights in %s - blocking until sustained absence",
             current,
         )
-        self.timer_manager.cancel_all_timers()
-        self.state_machine.transition(StateTransitionEvent.LIGHTS_ALL_OFF)
+        self.state_machine.transition(StateTransitionEvent.MANUAL_OFF_INTERVENTION)
+
+    def _start_manual_off_absence_wait(self) -> None:
+        """Start a conservative absence wait without changing normal light timing."""
+        duration = max(self._no_motion_wait, DEFAULT_NO_MOTION_WAIT)
+        _LOGGER.debug(
+            "Starting %ds manual-off absence wait",
+            duration,
+        )
+        self.timer_manager.start_timer(
+            "motion",
+            TimerType.MOTION,
+            self._async_timer_expired,
+            duration=duration,
+        )
 
     async def _async_ambient_light_changed(self, event: Event) -> None:
         """Handle ambient light sensor state change.
@@ -977,14 +983,18 @@ class MotionLightsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._start_motion_watchdog()
 
     def _on_enter_manual_off(self, from_state=None, to_state=None, event=None) -> None:
-        """Entering MANUAL_OFF - block automation until motion clears."""
+        """Entering MANUAL_OFF - block until a sustained no-motion window."""
         _LOGGER.debug("Entering MANUAL_OFF state - cancelling motion timer")
-        self._start_motion_watchdog()
         self._log_human_event("Lights turned off manually")
         self.timer_manager.cancel_timer("motion")
         self.timer_manager.cancel_timer("motion_delay")
-
         self.timer_manager.cancel_timer("extended")
+
+        motion_trigger = self.trigger_manager.get_trigger("motion")
+        if motion_trigger and motion_trigger.is_active():
+            self._start_motion_watchdog()
+        else:
+            self._start_manual_off_absence_wait()
 
     def _on_enter_idle(self, from_state=None, to_state=None, event=None) -> None:
         """Entering IDLE - turn off lights, cancel watchdog."""

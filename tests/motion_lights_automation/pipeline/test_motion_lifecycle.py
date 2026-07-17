@@ -364,7 +364,7 @@ class TestMotionInEveryState:
         harness.assert_timer_active("motion")
 
     async def test_motion_off_from_motion_manual(self, harness):
-        """MOTION_MANUAL + motion off -> IDLE."""
+        """MOTION_MANUAL + motion off -> MANUAL with extended timeout."""
         # Get to MOTION_MANUAL: manual light on -> MANUAL, then motion on
         await harness.manual_light_on("light.ceiling", brightness=200)
         harness.assert_state(STATE_MANUAL)
@@ -373,17 +373,21 @@ class TestMotionInEveryState:
         harness.assert_state(STATE_MOTION_MANUAL)
 
         await harness.motion_off()
-        harness.assert_state(STATE_IDLE)
-        harness.assert_timer_inactive("extended")
+        harness.assert_state(STATE_MANUAL)
+        harness.assert_timer_active("extended")
 
-    async def test_motion_off_from_manual_off_rearms_automation(self, harness):
-        """MANUAL_OFF + motion off -> IDLE."""
+    async def test_motion_off_from_manual_off_starts_absence_wait(self, harness):
+        """MANUAL_OFF + motion off stays blocked until the timer expires."""
         harness.force_state(STATE_MANUAL_OFF)
 
         await harness.motion_on()
         harness.assert_state(STATE_MANUAL_OFF)
 
         await harness.motion_off()
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
+
+        await harness.expire_timer("motion")
         harness.assert_state(STATE_IDLE)
         harness.assert_timer_inactive("extended")
 

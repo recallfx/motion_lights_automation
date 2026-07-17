@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 
+from custom_components.motion_lights_automation.const import CONF_NO_MOTION_WAIT
 from custom_components.motion_lights_automation.state_machine import (
     STATE_AUTO,
     STATE_IDLE,
@@ -76,24 +77,40 @@ class TestTimerLifecycle:
     async def test_manual_off_while_occupied_has_no_fallback_timer(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """Manual off blocks only until the active motion sensor clears."""
+        """Manual off has no reset timer while the PIR remains active."""
         await harness.motion_on()
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
         harness.assert_timer_inactive("extended")
 
-    async def test_manual_off_motion_clear_returns_to_idle(
+    async def test_manual_off_requires_sustained_no_motion_before_rearming(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """MANUAL_OFF returns to standby as soon as the room is empty."""
+        """A brief PIR clear must not re-arm lights while someone is present."""
         await harness.motion_on()
 
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
 
         await harness.motion_off()
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
+
+        # The person moves again before the absence window expires.
+        await harness.motion_on()
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_inactive("motion")
+        harness.assert_lights_off()
+
+        # Only sustained absence re-arms the next visit.
+        await harness.motion_off()
+        await harness.expire_timer("motion")
         harness.assert_state(STATE_IDLE)
+
+        await harness.motion_on()
+        harness.assert_state(STATE_MOTION_AUTO)
+        harness.assert_lights_on()
 
     async def test_manual_off_keeps_bounded_motion_watchdog(
         self, hass: HomeAssistant, harness: CoordinatorHarness
@@ -108,7 +125,7 @@ class TestTimerLifecycle:
     async def test_manual_off_watchdog_recovers_missed_motion_off(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """The watchdog re-arms automation when the sensor is already clear."""
+        """The watchdog starts the absence window when the PIR is already clear."""
         await harness.motion_on()
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
@@ -117,7 +134,27 @@ class TestTimerLifecycle:
         with patch.object(motion_trigger, "is_active", return_value=False):
             await harness.coordinator._async_motion_watchdog_fired()
 
-        harness.assert_state(STATE_IDLE)
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
+
+    async def test_manual_off_absence_wait_has_five_minute_floor(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Fast normal auto-off settings must not make manual-off unsafe."""
+        harness = await CoordinatorHarness.create(
+            hass,
+            config_data={CONF_NO_MOTION_WAIT: 5},
+        )
+        try:
+            await harness.motion_on()
+            await harness.manual_light_off("light.ceiling")
+            await harness.motion_off()
+
+            timer = harness.coordinator.timer_manager.get_timer("motion")
+            assert timer is not None
+            assert timer.duration == 300
+        finally:
+            await harness.cleanup()
 
 
 # ===================================================================
@@ -200,10 +237,10 @@ class TestTimerInteractions:
         harness.assert_state(STATE_MANUAL)
         harness.assert_timer_active("extended")
 
-    async def test_motion_off_in_manual_off_rearms_automation(
+    async def test_motion_off_in_manual_off_starts_absence_wait(
         self, hass: HomeAssistant, harness: CoordinatorHarness
     ) -> None:
-        """Motion clearing in MANUAL_OFF returns to IDLE."""
+        """Motion clearing in MANUAL_OFF starts, but does not finish, re-arming."""
         # Get to MANUAL_OFF
         await harness.motion_on()
         harness.assert_state(STATE_MOTION_AUTO)
@@ -212,10 +249,14 @@ class TestTimerInteractions:
         await harness.manual_light_off("light.ceiling")
         harness.assert_state(STATE_MANUAL_OFF)
 
-        # Motion off means the room is empty, so automation is ready again.
+        # A clear PIR starts the configured absence window.
         await harness.motion_off()
-        harness.assert_state(STATE_IDLE)
+        harness.assert_state(STATE_MANUAL_OFF)
+        harness.assert_timer_active("motion")
         harness.assert_timer_inactive("extended")
+
+        await harness.expire_timer("motion")
+        harness.assert_state(STATE_IDLE)
 
     async def test_timer_expired_in_wrong_state_ignored(
         self, hass: HomeAssistant, harness: CoordinatorHarness

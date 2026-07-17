@@ -42,7 +42,7 @@ class TestStartupBehavior:
             await h.cleanup()
 
     async def test_startup_with_lights_on_no_motion(self, hass: HomeAssistant) -> None:
-        """Lights on, no motion at startup -> AUTO (with motion timer)."""
+        """Lights on, no motion at startup -> MANUAL with extended timer."""
         h = await CoordinatorHarness.create(
             hass,
             initial_lights={
@@ -51,13 +51,13 @@ class TestStartupBehavior:
             skip_grace_period=False,
         )
         try:
-            h.assert_state(STATE_AUTO)
-            h.assert_timer_active("motion")
+            h.assert_state(STATE_MANUAL)
+            h.assert_timer_active("extended")
         finally:
             await h.cleanup()
 
     async def test_startup_with_lights_on_and_motion(self, hass: HomeAssistant) -> None:
-        """Lights on + motion active at startup -> MOTION_AUTO."""
+        """Lights on + motion active at startup -> MOTION_MANUAL."""
         h = await CoordinatorHarness.create(
             hass,
             initial_motion="on",
@@ -67,7 +67,7 @@ class TestStartupBehavior:
             skip_grace_period=False,
         )
         try:
-            h.assert_state(STATE_MOTION_AUTO)
+            h.assert_state(STATE_MOTION_MANUAL)
         finally:
             await h.cleanup()
 

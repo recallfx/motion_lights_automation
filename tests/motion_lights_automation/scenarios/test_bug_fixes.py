@@ -237,10 +237,10 @@ class TestFix1_EntryCallbacksReceiveFromState:
         finally:
             coordinator.async_cleanup_listeners()
 
-    async def test_on_enter_idle_logs_motion_cleared_from_motion_manual(
+    async def test_on_enter_manual_logs_motion_cleared_from_motion_manual(
         self, hass: HomeAssistant, basic_entry: ConfigEntry
     ) -> None:
-        """MOTION_MANUAL -> IDLE should log that motion cleared."""
+        """MOTION_MANUAL -> MANUAL should log that motion cleared."""
         hass.states.async_set("binary_sensor.motion", "on")
         hass.states.async_set("light.ceiling", "on", attributes={"brightness": 200})
 
@@ -257,14 +257,15 @@ class TestFix1_EntryCallbacksReceiveFromState:
             hass.states.async_set("binary_sensor.motion", "off")
             await hass.async_block_till_done()
 
-            assert coordinator.current_state == STATE_IDLE
+            assert coordinator.current_state == STATE_MANUAL
+            assert coordinator.timer_manager.has_active_timer("extended")
 
             motion_cleared_messages = [
                 msg for msg in coordinator._event_log if "motion cleared" in msg.lower()
             ]
             assert len(motion_cleared_messages) > 0, (
                 "Expected a motion-cleared event log after "
-                f"MOTION_MANUAL -> IDLE transition. Got: {coordinator._event_log}"
+                f"MOTION_MANUAL -> MANUAL transition. Got: {coordinator._event_log}"
             )
         finally:
             coordinator.async_cleanup_listeners()
