@@ -248,6 +248,25 @@ class TestOverrideTrigger:
         trigger._async_override_changed(event)
         activated_callback.assert_called_once()
 
+    def test_override_trigger_activates_when_restored_from_unavailable(
+        self, hass: HomeAssistant
+    ) -> None:
+        """A restored ON state must activate override after startup."""
+        trigger = OverrideTrigger(hass, {"entity_id": "switch.override"})
+        activated_callback = MagicMock()
+        trigger.on_activated(activated_callback)
+
+        event = MagicMock(spec=Event)
+        old_state = MagicMock()
+        old_state.state = "unavailable"
+        new_state = MagicMock()
+        new_state.state = "on"
+        event.data = {"old_state": old_state, "new_state": new_state}
+
+        trigger._async_override_changed(event)
+
+        activated_callback.assert_called_once_with()
+
     def test_override_trigger_get_info(self, hass: HomeAssistant):
         """Test get_info method."""
         config = {"entity_id": "switch.override"}

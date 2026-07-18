@@ -173,6 +173,26 @@ class TestCoordinatorSetup:
         finally:
             await h.cleanup()
 
+    async def test_coordinator_applies_override_restored_after_startup(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Unavailable-to-ON restore must disable automation after startup."""
+        h = await CoordinatorHarness.create(
+            hass,
+            config_data={CONF_OVERRIDE_SWITCH: "switch.override"},
+            initial_override="unavailable",
+            skip_grace_period=True,
+        )
+        try:
+            h.assert_state(STATE_IDLE)
+
+            hass.states.async_set("switch.override", "on")
+            await hass.async_block_till_done()
+
+            h.assert_state(STATE_OVERRIDDEN)
+        finally:
+            await h.cleanup()
+
 
 # ============================================================================
 # Coordinator Cleanup
